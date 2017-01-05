@@ -2,7 +2,9 @@
 title: 'Online Bidding: Human or Robot'
 author: "Maggie Mhanna"
 date: "03/01/2017"
-output: md_document
+output:
+  html_document:
+    keep_md: yes
 ---
 
 In this project, I'll be chasing down robots for an online auction site. The goal is to identify online auction bids that are placed by "robots", helping the site owners easily flag these users for removal from their site to prevent unfair auction activity. 
@@ -13,7 +15,7 @@ In this project, I'll be chasing down robots for an online auction site. The goa
 library(dplyr)
 library(tidyr)
 library(knitr)
-library(devtools)
+library(pander)
 library(easyGgplot2)
 ```
 
@@ -212,7 +214,9 @@ features <- t(features)
 
 colnames(features) <- c("Human","Robot")
 
-kable(features)
+panderOptions("digits", 2)
+
+pander(features)
 ```
 
 As you can see from the table, most of the variables come out to be significant. 
