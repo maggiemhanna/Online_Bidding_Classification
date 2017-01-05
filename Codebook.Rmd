@@ -1,0 +1,502 @@
+---
+title: 'Online Bidding: Human or Robot'
+author: "Maggie Mhanna"
+date: "03/01/2017"
+output: html_document
+---
+
+In this project, I'll be chasing down robots for an online auction site. The goal is to identify online auction bids that are placed by "robots", helping the site owners easily flag these users for removal from their site to prevent unfair auction activity. 
+
+## Libraries required
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(devtools)
+library(easyGgplot2)
+```
+
+## Getting And Cleaning Data
+
+### Downloading Data
+
+```{r eval=FALSE}
+download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/train.csv.zip","train.csv.zip")
+download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/test.csv.zip","test.csv.zip")
+
+download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/bids.csv.zip","bids.csv.zip")
+download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/sampleSubmission.csv", "sampleSubmission.csv")
+```
+
+### Loading Data 
+
+```{r}
+train <- read.csv("train.csv")
+test <- read.csv("test.csv")
+bids <- read.csv("bids.csv")
+sampleSubmission <- read.csv("sampleSubmission.csv")
+```
+
+### Understanding the Data
+
+The data is primarily composed of two tables. One is a simple list of all bidders and the second one contains all the bids made by these bidders. 
+
+### Merge Data
+
+I will be combining the two datasets on Bidder ID. At the beginning, I need to remove all training and test samples that are not in the bid data frame.
+
+```{r}
+train$bidder_id <- as.character(train$bidder_id)
+test$bidder_id <- as.character(test$bidder_id)
+bids$bidder_id <- as.character(bids$bidder_id)
+
+train$outcome <- as.factor(train$outcome)
+
+train <- train[train$bidder_id %in% bids$bidder_id, ]
+test <- test[test$bidder_id %in% bids$bidder_id, ]
+```
+
+I can verify if any of the data in the columns is missing 
+
+```{r}
+colSums(is.na(bids))
+
+colSums(is.na(train))
+
+colSums(is.na(test))
+```
+
+Replace non available countries with NA 
+
+```{r}
+bids[ bids$country == "", "country" ] <- NA
+```
+
+To do any kind of prediction and apply machine learning, I need to summarize the data on Bidder ID level. This is because bidder and not bids can be bots. Hence, target variable is defined on bidder level.
+
+```{r}
+bid_train <- merge(bids,train, by= "bidder_id")
+```
+
+ 
+## Expolatory Data Analysis and Feature Selection
+
+Finding variables which are able to distinguish humans from robots is the first thing I will do before building any kind of model. In order to do so, what I simply do is find the mean value of each parameter for both humans and Robots and see if they look different. There are many other ways to do the same thing, however this is the simplest of them all the understand. 
+
+### Order data frames by bidder id and time 
+
+```{r}
+bid_train <- bid_train[order(bid_train$bidder_id, bid_train$time),]
+train <- train[order(train$bidder_id),]
+```
+
+### mean number of bidders
+
+```{r}
+mean_nb_bidders <- summarise(group_by(bid_train,outcome), nb_bidders = n_distinct(bidder_id)) %>%
+    select(-outcome)
+```
+
+### mean number of bids per bidder
+
+```{r}
+mean_nb_bids <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_bids = n_distinct(bid_id)),outcome), nb_bids = mean(nb_bids)) %>%
+    select(-outcome)
+```
+
+### mean number of auctions per bidder
+
+```{r}
+mean_nb_auctions <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_auctions = n_distinct(auction)),outcome), nb_auctions = mean(nb_auctions)) %>%
+    select(-outcome)
+```
+
+### mean number of devices per bidder
+
+```{r}
+mean_nb_devices <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_devices = n_distinct(device)),outcome), nb_devices = mean(nb_devices)) %>%
+    select(-outcome)
+```
+
+### mean number of countries per bidder
+
+```{r}
+mean_nb_countries <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_countries = n_distinct(country)),outcome), nb_countries = mean(nb_countries)) %>%
+    select(-outcome)
+```
+
+### mean number of ips per bidder
+
+```{r}
+mean_nb_ips <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_ips = n_distinct(ip)),outcome), nb_ips = mean(nb_ips)) %>%
+    select(-outcome)
+```
+
+### mean number of bids per auction per bidder
+
+```{r}
+mean_bids_per_auction <- 
+    group_by(bid_train,outcome,bidder_id,auction) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(outcome,bidder_id) %>%
+    summarise(mean_bids = mean(nb_bids)) %>% 
+    group_by(outcome) %>%
+    summarise(bids_per_auction = mean(mean_bids)) %>%
+    select(-outcome)
+```
+
+### mean number of bids per device per bidder
+
+```{r}
+mean_bids_per_device <- 
+    group_by(bid_train,outcome,bidder_id,device) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(outcome,bidder_id) %>%
+    summarise(mean_bids = mean(nb_bids)) %>% 
+    group_by(outcome) %>%
+    summarise(bids_per_device = mean(mean_bids)) %>%
+    select(-outcome)
+```
+
+### mean number of bids per country per bidder
+```{r}
+mean_bids_per_country <- 
+    group_by(bid_train,outcome,bidder_id,country) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(outcome,bidder_id) %>%
+    summarise(mean_bids = mean(nb_bids)) %>% 
+    group_by(outcome) %>%
+    summarise(bids_per_country = mean(mean_bids)) %>%
+    select(-outcome)
+```
+
+### mean number of bids per url per bidder
+
+```{r}
+mean_bids_per_url <- 
+    group_by(bid_train,outcome,bidder_id,url) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(outcome,bidder_id) %>%
+    summarise(mean_bids = mean(nb_bids)) %>% 
+    group_by(outcome) %>%
+    summarise(bids_per_url = mean(mean_bids)) %>%
+    select(-outcome)
+```
+
+### mean number of bids per url per ip
+
+```{r}
+mean_bids_per_ip <- 
+    group_by(bid_train,outcome,bidder_id,ip) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(outcome,bidder_id) %>%
+    summarise(mean_bids = mean(nb_bids)) %>% 
+    group_by(outcome) %>%
+    summarise(bids_per_ip = mean(mean_bids)) %>%
+    select(-outcome)
+```
+
+### mean time difference between 2 bids
+
+```{r}
+mean_resp <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id), resp = mean(diff(time))), outcome), mean_resp = mean(resp, na.rm = TRUE)) %>%
+    select(-outcome)
+```
+
+
+```{r}
+features <- cbind(mean_nb_bidders,mean_nb_bids,mean_nb_auctions,mean_nb_devices,mean_nb_countries,mean_nb_ips, mean_bids_per_auction, mean_bids_per_country, mean_bids_per_device, mean_bids_per_ip, mean_bids_per_url, mean_resp)
+
+features <- t(features)
+
+colnames(features) <- c("Human","Robot")
+
+kable(features)
+```
+
+As you can see from the table, most of the variables come out to be significant. 
+
+## Creating the training data
+
+The features I have created can be summarised below:
+
+1. Total bids for each bidder
+
+2. Total auctions for each bidder
+
+3. Total countries for each bidder
+
+4. Total urls for each bidder
+
+5. Total devices for each bidder
+
+6. Total merchanise for each bidder
+
+7. Total ips for each bidder
+
+8. Mean difference of time between two consecutive bids
+
+9. Mean number bids per auction for each bidder
+
+10. Mean number bids per country for each bidder
+
+11. Mean number bids per device for each bidder
+
+12. Mean number bids per ip for each bidder
+
+13. Mean number bids per url for each bidder
+
+
+```{r}
+bidder_id <- train$bidder_id
+
+outcome <- train$outcome
+
+nb_bids <- group_by(bid_train,bidder_id) %>%
+    summarize(nb_bids = n_distinct(bid_id)) %>%
+    select(nb_bids)
+ 
+nb_auctions <- group_by(bid_train,bidder_id) %>%
+    summarize(nb_auctions = n_distinct(auction)) %>%
+    select(nb_auctions)
+          
+nb_merchandise <- group_by(bid_train,bidder_id) %>%         
+    summarize(nb_merchandise = n_distinct(merchandise)) %>%
+    select(nb_merchandise)
+
+nb_devices <- group_by(bid_train,bidder_id) %>%
+    summarize(nb_devices = n_distinct(device)) %>%
+    select(nb_devices)
+
+nb_countries <- group_by(bid_train,bidder_id) %>%
+    summarize(nb_countries = n_distinct(country)) %>%
+    select(nb_countries)
+
+nb_ips <- group_by(bid_train,bidder_id) %>%
+    summarize(nb_ips = n_distinct(ip)) %>%
+    select(nb_ips)
+
+nb_urls <- group_by(bid_train,bidder_id) %>%
+    summarize(nb_urls = n_distinct(url)) %>%
+    select(nb_urls)
+
+bid_inter_time <- group_by(bid_train,bidder_id) %>%
+    summarise(inter_time = mean(diff(time))) %>%
+    select(inter_time)
+
+bids_per_auction <- group_by(bid_train,bidder_id,auction) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(bidder_id) %>%
+    summarise(bids_per_auction = mean(nb_bids)) %>% select(bids_per_auction)
+
+bids_per_country <- group_by(bid_train,bidder_id,country) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(bidder_id) %>%
+    summarise(bids_per_country = mean(nb_bids)) %>% select(bids_per_country)
+
+bids_per_device <- group_by(bid_train,bidder_id,device) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(bidder_id) %>%
+    summarise(bids_per_device = mean(nb_bids)) %>% select(bids_per_device)
+
+bids_per_ip <- group_by(bid_train,bidder_id,ip) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(bidder_id) %>%
+    summarise(bids_per_ip = mean(nb_bids)) %>% select(bids_per_ip)
+
+bids_per_url <- group_by(bid_train,bidder_id,url) %>% 
+    summarise(nb_bids = n_distinct(bid_id)) %>% 
+    group_by(bidder_id) %>%
+    summarise(bids_per_url = mean(nb_bids)) %>% select(bids_per_url)
+
+training <- data.frame(nb_bids,nb_auctions,nb_devices,nb_countries,
+            nb_ips,bid_inter_time,bids_per_auction,bids_per_country,bids_per_device,
+                       bids_per_ip,bids_per_url,outcome)
+```
+
+Now we can look at the variables to see if they look as differentiators. For example:
+
+```{r}
+plot(density(training[training$outcome==0,"nb_bids"]), xlim=range(0:5000), main="average number of bids", xlab = "nb_bids", ylab = "density", yaxt='n', lwd=2)
+par(new=TRUE)
+plot(density(training[training$outcome==1,"nb_bids"]), xlim=range(0:5000), main="average number of bids", xlab = "nb_bids", ylab = "density", yaxt='n',col="red", lwd=2)
+legend(x="topright", c("Human","Robot"), lty=c(1,1), lwd=c(2.5,2.5), col=c("black","red"))
+```
+
+```{r}
+plot(density(training[training$outcome==0,"bids_per_auction"]), xlim=range(0:50), main="average number of bids per auction", xlab = "bids_per_auction", ylab = "density", yaxt='n', lwd=2)
+par(new=TRUE)
+plot(density(training[training$outcome==1,"bids_per_auction"]), xlim=range(0:50), main="average number of bids per auction", xlab = "bids_per_auction", ylab = "density", yaxt='n',col="red", lwd=2)
+legend(x="topright", c("Human","Robot"), lty=c(1,1), lwd=c(2.5,2.5), col=c("black","red"))
+```
+
+### Shuffle training dataset
+
+```{r set-options}
+options(width = 160)
+
+training <- training[sample(seq_len(nrow(training))),]
+
+kable(training[1:20,])
+```
+
+### Repeat for Testing 
+
+```{r}
+source("Analysis_testing.R")
+```
+
+
+## Classification
+
+The test problem used here is a binary classification. I will be using the caret package in R as it provides an excellent interface into hundreds of different machine learning algorithms and useful tools for evaluating and comparing models.
+
+The test harness is comprised of three key elements:
+    
+* The dataset we will use to train models.
+* The test options used to evaluate a model (e.g. resampling method).
+* The metric we are interested in measuring and comparing.
+
+```{r}
+library(caret)
+```
+
+### Parallel Processing
+
+R supports parallel computations with the core parallel package. What the doParallel package does is provide a backend while utilizing the core parallel package. The caret package is used for developing and testing machine learning models in R. This package as well as others like plyr support multicore CPU speedups if a parallel backend is registered before the supported instructions are called.
+
+```{r}
+library(doParallel)
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+```
+
+
+### Cross Validation Options
+
+Here, We usually randomly split the data into K distinct blocks of roughly equal size.
+
+* We leave out the first block of data and fit a model.
+* This model is used to predict the held-out block
+* We continue this process until we’ve predicted all K held–out blocks
+
+The final performance is based on the hold-out predictions K is usually taken to be 5 or 10 and leave one out cross–validation has each sample as a block Repeated K–fold CV creates multiple versions of the folds and aggregates the results.
+
+In this case study I will use 10-fold cross validation with 3 repeats.
+
+```{r}
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+seed <- 7
+```
+
+### Test Metric
+
+There are many possible evaluation metrics to chose from. Caret provides a good selection and you can use your own if needed. Some good test metrics to use for classification include:
+    
+* Accuracy
+* Kappa
+* ROC
+
+The evaluation metric is specified the call to the train() function for a given model, so I will define the metric now for use with all of the model training later.
+
+```{r}
+metric <- "Accuracy"
+```
+
+### Model Building
+
+There are three concerns when selecting models to spot check:
+    
+* What models to actually choose.
+* How to configure their arguments.
+* Preprocessing of the data for the algorithm.
+
+### Algorithm
+
+It is important to have a good mix of algorithm representations (lines, trees, instances, etc.) as well as algorithms for learning those representations.
+
+Almost all machine learning algorithms are parameterized, requiring that you specify their arguments.
+
+One aspect of the caret package in R is that it helps with tuning algorithm parameters. It can also estimate good defaults (via the automatic tuning functionality and the tunelength argument to the train() function).
+
+### Data Preprocessing
+
+Some algorithms perform a whole lot better with some basic data preprocessing. Fortunately, the train() function in caret lets you specify preprocessing of the data to perform prior to training. The transforms you need are provided to the preProcess argument as a list and are executed on the data sequentially
+
+The most useful transform is to scale and center the data via. For example:
+    
+```{r}
+preProcess=c("center", "scale")
+```
+### Training 
+
+
+```{r}
+# Logistic Regression
+
+set.seed(seed)
+fit.glm <- train(outcome~., data=training, method="glm", metric=metric, trControl=control, na.action=na.exclude)
+
+# SVM Radial
+
+set.seed(seed)
+fit.svmRadial <- train(outcome~., data=training, method="svmRadial", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE, na.action=na.exclude)
+
+# Random Forest
+
+set.seed(seed)
+fit.rf <- train(outcome~., data=training, method="rf", metric=metric, trControl=control, na.action=na.exclude)
+
+# Stochastic Gradient Boosting (Generalized Boosted Modeling)
+
+set.seed(seed)
+fit.gbm <- train(outcome~., data=training, method="gbm", metric=metric, trControl=control, verbose=FALSE, na.action=na.exclude)
+```
+
+### Model Selection
+
+```{r}
+results <- resamples(list(logistic=fit.glm, svm=fit.svmRadial,rf=fit.rf, gbm=fit.gbm))
+
+summary(results)
+```
+
+It is also useful to review the results using a few different visualization techniques to get an idea of the mean and spread of accuracies.
+
+```{r}
+# boxplot comparison
+bwplot(results)
+# Dot-plot comparison
+dotplot(results)
+```
+
+### Prediction on Testing Model
+
+We choose to predict using the gbm algorithm 
+```{r}
+outcome_probs <- predict(fit.gbm, newdata = testing, type = "prob",na.action = na.pass)
+outcome_class <- predict(fit.gbm, newdata = testing, type = "raw",na.action = na.pass)
+
+Submission <- cbind(bidder_id_t, predicted_outcome = factor(outcome_class, label=c("Human","Robot")))
+
+```
+
+The predicted outcome of the first 200 bidders in the test dataset
+
+```{r}
+kable(Submission[1:200,])
+stopCluster(cl)
+```
+
+## Room for Improvement
+
+The analysis done can be improved in several ways
+
+* Many other features can be taken into consideration
+
+* Other classification algorithms should be considered and compared to see which algorithm is better using the test metric
+
+* ROC should be considered instead of accuracy because classification is asymmetric and should be plotted for each algorithm to check which performs better on the cross validation 
+
+
