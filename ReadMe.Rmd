@@ -2,9 +2,7 @@
 title: "ReadMe"
 author: "Maggie Mhanna"
 date: "04/01/2017"
-output: 
-md_document:
-    variant: markdown_github
+output: md_document
 ---
 
 This is my solution for the Kaggle competition - Facebook Recruiting IV: Human or Robot? 
@@ -35,4 +33,4 @@ The following are the steps done
 
 ## Additional Information
 
-You can find additional information about the variables, data and transformations in the CodeBook.html file.
+You can find additional information about the variables, data and transformations in the CodeBook.md file.

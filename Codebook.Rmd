@@ -2,7 +2,7 @@
 title: 'Online Bidding: Human or Robot'
 author: "Maggie Mhanna"
 date: "03/01/2017"
-output: html_document
+output: md_document
 ---
 
 In this project, I'll be chasing down robots for an online auction site. The goal is to identify online auction bids that are placed by "robots", helping the site owners easily flag these users for removal from their site to prevent unfair auction activity. 
@@ -480,6 +480,7 @@ outcome_class <- predict(fit.gbm, newdata = testing, type = "raw",na.action = na
 
 Submission <- cbind(bidder_id_t, predicted_outcome = factor(outcome_class, label=c("Human","Robot")))
 
+write.csv(Submission,'Submission.csv')
 ```
 
 The predicted outcome of the first 200 bidders in the test dataset
