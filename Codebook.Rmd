@@ -215,7 +215,7 @@ features <- t(features)
 
 colnames(features) <- c("Human","Robot")
 
-pander(features)
+pander(features, style='grid')
 ```
 
 
@@ -342,7 +342,7 @@ options(width = 160)
 
 training <- training[sample(seq_len(nrow(training))),]
 
-kable(training[1:20,])
+pander(training[1:20,], style='grid')
 ```
 
 ### Repeat for Testing 
@@ -490,7 +490,7 @@ write.csv(Submission,'Submission.csv')
 The predicted outcome of the first 200 bidders in the test dataset
 
 ```{r}
-kable(Submission[1:200,])
+pander(Submission[1:200,], style='grid')
 stopCluster(cl)
 ```
 
