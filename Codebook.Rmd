@@ -2,9 +2,7 @@
 title: 'Online Bidding: Human or Robot'
 author: "Maggie Mhanna"
 date: "03/01/2017"
-output:
-  html_document:
-    keep_md: yes
+output: md_document
 ---
 
 In this project, I'll be chasing down robots for an online auction site. The goal is to identify online auction bids that are placed by "robots", helping the site owners easily flag these users for removal from their site to prevent unfair auction activity. 

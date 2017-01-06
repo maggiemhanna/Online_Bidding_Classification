@@ -1,318 +1,307 @@
-# Online Bidding: Human or Robot
-Maggie Mhanna  
-03/01/2017  
+In this project, I'll be chasing down robots for an online auction site.
+The goal is to identify online auction bids that are placed by "robots",
+helping the site owners easily flag these users for removal from their
+site to prevent unfair auction activity.
 
-In this project, I'll be chasing down robots for an online auction site. The goal is to identify online auction bids that are placed by "robots", helping the site owners easily flag these users for removal from their site to prevent unfair auction activity. 
+Libraries required
+------------------
 
-## Libraries required
+    library(dplyr)
 
+    ## 
+    ## Attaching package: 'dplyr'
 
-```r
-library(dplyr)
-```
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
 
-```
-## 
-## Attaching package: 'dplyr'
-```
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
 
-```
-## The following objects are masked from 'package:stats':
-## 
-##     filter, lag
-```
-
-```
-## The following objects are masked from 'package:base':
-## 
-##     intersect, setdiff, setequal, union
-```
-
-```r
-library(tidyr)
-library(knitr)
-```
+    library(tidyr)
+    library(knitr)
 
 More libraries will be loaded later.
 
-## Getting And Cleaning Data
+Getting And Cleaning Data
+-------------------------
 
 ### Downloading Data
 
+    download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/train.csv.zip","train.csv.zip")
+    download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/test.csv.zip","test.csv.zip")
 
-```r
-download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/train.csv.zip","train.csv.zip")
-download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/test.csv.zip","test.csv.zip")
+    download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/bids.csv.zip","bids.csv.zip")
+    download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/sampleSubmission.csv", "sampleSubmission.csv")
 
-download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/bids.csv.zip","bids.csv.zip")
-download.file("https://www.kaggle.com/c/facebook-recruiting-iv-human-or-bot/download/sampleSubmission.csv", "sampleSubmission.csv")
-```
+### Loading Data
 
-### Loading Data 
-
-
-```r
-train <- read.csv("train.csv")
-test <- read.csv("test.csv")
-bids <- read.csv("bids.csv")
-sampleSubmission <- read.csv("sampleSubmission.csv")
-```
+    train <- read.csv("train.csv")
+    test <- read.csv("test.csv")
+    bids <- read.csv("bids.csv")
+    sampleSubmission <- read.csv("sampleSubmission.csv")
 
 ### Understanding the Data
 
-The data is primarily composed of two tables. One is a simple list of all bidders and the second one contains all the bids made by these bidders. 
+The data is primarily composed of two tables. One is a simple list of
+all bidders and the second one contains all the bids made by these
+bidders.
 
 ### Merge Data
 
-I will be combining the two datasets on Bidder ID. At the beginning, I need to remove all training and test samples that are not in the bid data frame.
+I will be combining the two datasets on Bidder ID. At the beginning, I
+need to remove all training and test samples that are not in the bid
+data frame.
 
+    train$bidder_id <- as.character(train$bidder_id)
+    test$bidder_id <- as.character(test$bidder_id)
+    bids$bidder_id <- as.character(bids$bidder_id)
 
-```r
-train$bidder_id <- as.character(train$bidder_id)
-test$bidder_id <- as.character(test$bidder_id)
-bids$bidder_id <- as.character(bids$bidder_id)
+    train$outcome <- as.factor(train$outcome)
 
-train$outcome <- as.factor(train$outcome)
+    train <- train[train$bidder_id %in% bids$bidder_id, ]
+    test <- test[test$bidder_id %in% bids$bidder_id, ]
 
-train <- train[train$bidder_id %in% bids$bidder_id, ]
-test <- test[test$bidder_id %in% bids$bidder_id, ]
-```
+I can verify if any of the data in the columns is missing
 
-I can verify if any of the data in the columns is missing 
+    colSums(is.na(bids))
 
+    ##      bid_id   bidder_id     auction merchandise      device        time 
+    ##           0           0           0           0           0           0 
+    ##     country          ip         url 
+    ##           0           0           0
 
-```r
-colSums(is.na(bids))
-```
+    colSums(is.na(train))
 
-```
-##      bid_id   bidder_id     auction merchandise      device        time 
-##           0           0           0           0           0           0 
-##     country          ip         url 
-##           0           0           0
-```
+    ##       bidder_id payment_account         address         outcome 
+    ##               0               0               0               0
 
-```r
-colSums(is.na(train))
-```
+    colSums(is.na(test))
 
-```
-##       bidder_id payment_account         address         outcome 
-##               0               0               0               0
-```
+    ##       bidder_id payment_account         address 
+    ##               0               0               0
 
-```r
-colSums(is.na(test))
-```
+Replace non available countries with NA
 
-```
-##       bidder_id payment_account         address 
-##               0               0               0
-```
+    bids[ bids$country == "", "country" ] <- NA
 
-Replace non available countries with NA 
+To do any kind of prediction and apply machine learning, I need to
+summarize the data on Bidder ID level. This is because bidder and not
+bids can be bots. Hence, target variable is defined on bidder level.
 
+    bid_train <- merge(bids,train, by= "bidder_id")
 
-```r
-bids[ bids$country == "", "country" ] <- NA
-```
+Expolatory Data Analysis and Feature Selection
+----------------------------------------------
 
-To do any kind of prediction and apply machine learning, I need to summarize the data on Bidder ID level. This is because bidder and not bids can be bots. Hence, target variable is defined on bidder level.
+Finding variables which are able to distinguish humans from robots is
+the first thing I will do before building any kind of model. In order to
+do so, what I simply do is find the mean value of each parameter for
+both humans and Robots and see if they look different. There are many
+other ways to do the same thing, however this is the simplest of them
+all the understand.
 
+### Order data frames by bidder id and time
 
-```r
-bid_train <- merge(bids,train, by= "bidder_id")
-```
-
- 
-## Expolatory Data Analysis and Feature Selection
-
-Finding variables which are able to distinguish humans from robots is the first thing I will do before building any kind of model. In order to do so, what I simply do is find the mean value of each parameter for both humans and Robots and see if they look different. There are many other ways to do the same thing, however this is the simplest of them all the understand. 
-
-### Order data frames by bidder id and time 
-
-
-```r
-bid_train <- bid_train[order(bid_train$bidder_id, bid_train$time),]
-train <- train[order(train$bidder_id),]
-```
+    bid_train <- bid_train[order(bid_train$bidder_id, bid_train$time),]
+    train <- train[order(train$bidder_id),]
 
 ### mean number of bidders
 
-
-```r
-mean_nb_bidders <- summarise(group_by(bid_train,outcome), nb_bidders = n_distinct(bidder_id)) %>%
-    select(-outcome)
-```
+    mean_nb_bidders <- summarise(group_by(bid_train,outcome), nb_bidders = n_distinct(bidder_id)) %>%
+        select(-outcome)
 
 ### mean number of bids per bidder
 
-
-```r
-mean_nb_bids <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_bids = n_distinct(bid_id)),outcome), nb_bids = mean(nb_bids)) %>%
-    select(-outcome)
-```
+    mean_nb_bids <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_bids = n_distinct(bid_id)),outcome), nb_bids = mean(nb_bids)) %>%
+        select(-outcome)
 
 ### mean number of auctions per bidder
 
-
-```r
-mean_nb_auctions <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_auctions = n_distinct(auction)),outcome), nb_auctions = mean(nb_auctions)) %>%
-    select(-outcome)
-```
+    mean_nb_auctions <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_auctions = n_distinct(auction)),outcome), nb_auctions = mean(nb_auctions)) %>%
+        select(-outcome)
 
 ### mean number of devices per bidder
 
-
-```r
-mean_nb_devices <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_devices = n_distinct(device)),outcome), nb_devices = mean(nb_devices)) %>%
-    select(-outcome)
-```
+    mean_nb_devices <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_devices = n_distinct(device)),outcome), nb_devices = mean(nb_devices)) %>%
+        select(-outcome)
 
 ### mean number of countries per bidder
 
-
-```r
-mean_nb_countries <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_countries = n_distinct(country)),outcome), nb_countries = mean(nb_countries)) %>%
-    select(-outcome)
-```
+    mean_nb_countries <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_countries = n_distinct(country)),outcome), nb_countries = mean(nb_countries)) %>%
+        select(-outcome)
 
 ### mean number of ips per bidder
 
-
-```r
-mean_nb_ips <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_ips = n_distinct(ip)),outcome), nb_ips = mean(nb_ips)) %>%
-    select(-outcome)
-```
+    mean_nb_ips <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id),nb_ips = n_distinct(ip)),outcome), nb_ips = mean(nb_ips)) %>%
+        select(-outcome)
 
 ### mean number of bids per auction per bidder
 
-
-```r
-mean_bids_per_auction <- 
-    group_by(bid_train,outcome,bidder_id,auction) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(outcome,bidder_id) %>%
-    summarise(mean_bids = mean(nb_bids)) %>% 
-    group_by(outcome) %>%
-    summarise(bids_per_auction = mean(mean_bids)) %>%
-    select(-outcome)
-```
+    mean_bids_per_auction <- 
+        group_by(bid_train,outcome,bidder_id,auction) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(outcome,bidder_id) %>%
+        summarise(mean_bids = mean(nb_bids)) %>% 
+        group_by(outcome) %>%
+        summarise(bids_per_auction = mean(mean_bids)) %>%
+        select(-outcome)
 
 ### mean number of bids per device per bidder
 
-
-```r
-mean_bids_per_device <- 
-    group_by(bid_train,outcome,bidder_id,device) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(outcome,bidder_id) %>%
-    summarise(mean_bids = mean(nb_bids)) %>% 
-    group_by(outcome) %>%
-    summarise(bids_per_device = mean(mean_bids)) %>%
-    select(-outcome)
-```
+    mean_bids_per_device <- 
+        group_by(bid_train,outcome,bidder_id,device) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(outcome,bidder_id) %>%
+        summarise(mean_bids = mean(nb_bids)) %>% 
+        group_by(outcome) %>%
+        summarise(bids_per_device = mean(mean_bids)) %>%
+        select(-outcome)
 
 ### mean number of bids per country per bidder
 
-```r
-mean_bids_per_country <- 
-    group_by(bid_train,outcome,bidder_id,country) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(outcome,bidder_id) %>%
-    summarise(mean_bids = mean(nb_bids)) %>% 
-    group_by(outcome) %>%
-    summarise(bids_per_country = mean(mean_bids)) %>%
-    select(-outcome)
-```
+    mean_bids_per_country <- 
+        group_by(bid_train,outcome,bidder_id,country) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(outcome,bidder_id) %>%
+        summarise(mean_bids = mean(nb_bids)) %>% 
+        group_by(outcome) %>%
+        summarise(bids_per_country = mean(mean_bids)) %>%
+        select(-outcome)
 
 ### mean number of bids per url per bidder
 
-
-```r
-mean_bids_per_url <- 
-    group_by(bid_train,outcome,bidder_id,url) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(outcome,bidder_id) %>%
-    summarise(mean_bids = mean(nb_bids)) %>% 
-    group_by(outcome) %>%
-    summarise(bids_per_url = mean(mean_bids)) %>%
-    select(-outcome)
-```
+    mean_bids_per_url <- 
+        group_by(bid_train,outcome,bidder_id,url) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(outcome,bidder_id) %>%
+        summarise(mean_bids = mean(nb_bids)) %>% 
+        group_by(outcome) %>%
+        summarise(bids_per_url = mean(mean_bids)) %>%
+        select(-outcome)
 
 ### mean number of bids per url per ip
 
-
-```r
-mean_bids_per_ip <- 
-    group_by(bid_train,outcome,bidder_id,ip) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(outcome,bidder_id) %>%
-    summarise(mean_bids = mean(nb_bids)) %>% 
-    group_by(outcome) %>%
-    summarise(bids_per_ip = mean(mean_bids)) %>%
-    select(-outcome)
-```
+    mean_bids_per_ip <- 
+        group_by(bid_train,outcome,bidder_id,ip) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(outcome,bidder_id) %>%
+        summarise(mean_bids = mean(nb_bids)) %>% 
+        group_by(outcome) %>%
+        summarise(bids_per_ip = mean(mean_bids)) %>%
+        select(-outcome)
 
 ### mean time difference between 2 bids
 
+    mean_resp <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id), resp = mean(diff(time))), outcome), mean_resp = mean(resp, na.rm = TRUE)) %>%
+        select(-outcome)
 
-```r
-mean_resp <- summarise(group_by(summarise(group_by(bid_train,outcome,bidder_id), resp = mean(diff(time))), outcome), mean_resp = mean(resp, na.rm = TRUE)) %>%
-    select(-outcome)
-```
+    features <- cbind(mean_nb_bidders,mean_nb_bids,mean_nb_auctions,mean_nb_devices,mean_nb_countries,mean_nb_ips, mean_bids_per_auction, mean_bids_per_country, mean_bids_per_device, mean_bids_per_ip, mean_bids_per_url, mean_resp)
 
+    features <- t(features)
 
+    colnames(features) <- c("Human","Robot")
 
-```r
-features <- cbind(mean_nb_bidders,mean_nb_bids,mean_nb_auctions,mean_nb_devices,mean_nb_countries,mean_nb_ips, mean_bids_per_auction, mean_bids_per_country, mean_bids_per_device, mean_bids_per_ip, mean_bids_per_url, mean_resp)
+    kable(features)
 
-features <- t(features)
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th align="right">Human</th>
+<th align="right">Robot</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>nb_bidders</td>
+<td align="right">1.881000e+03</td>
+<td align="right">1.030000e+02</td>
+</tr>
+<tr class="even">
+<td>nb_bids</td>
+<td align="right">1.413508e+03</td>
+<td align="right">4.004039e+03</td>
+</tr>
+<tr class="odd">
+<td>nb_auctions</td>
+<td align="right">5.807071e+01</td>
+<td align="right">1.450388e+02</td>
+</tr>
+<tr class="even">
+<td>nb_devices</td>
+<td align="right">7.394737e+01</td>
+<td align="right">1.636117e+02</td>
+</tr>
+<tr class="odd">
+<td>nb_countries</td>
+<td align="right">1.267677e+01</td>
+<td align="right">2.647573e+01</td>
+</tr>
+<tr class="even">
+<td>nb_ips</td>
+<td align="right">5.812562e+02</td>
+<td align="right">2.387796e+03</td>
+</tr>
+<tr class="odd">
+<td>bids_per_auction</td>
+<td align="right">6.441525e+00</td>
+<td align="right">2.315467e+01</td>
+</tr>
+<tr class="even">
+<td>bids_per_country</td>
+<td align="right">4.047429e+01</td>
+<td align="right">1.809891e+02</td>
+</tr>
+<tr class="odd">
+<td>bids_per_device</td>
+<td align="right">1.235731e+01</td>
+<td align="right">1.003713e+02</td>
+</tr>
+<tr class="even">
+<td>bids_per_ip</td>
+<td align="right">8.693291e+00</td>
+<td align="right">6.039463e+01</td>
+</tr>
+<tr class="odd">
+<td>bids_per_url</td>
+<td align="right">1.562716e+01</td>
+<td align="right">1.167530e+02</td>
+</tr>
+<tr class="even">
+<td>mean_resp</td>
+<td align="right">3.395101e+12</td>
+<td align="right">5.332332e+10</td>
+</tr>
+</tbody>
+</table>
 
-colnames(features) <- c("Human","Robot")
+As you can see from the table, most of the variables come out to be
+significant.
 
-kable(features)
-```
-
-                           Human          Robot
------------------  -------------  -------------
-nb_bidders          1.881000e+03   1.030000e+02
-nb_bids             1.413508e+03   4.004039e+03
-nb_auctions         5.807071e+01   1.450388e+02
-nb_devices          7.394737e+01   1.636117e+02
-nb_countries        1.267677e+01   2.647573e+01
-nb_ips              5.812562e+02   2.387796e+03
-bids_per_auction    6.441525e+00   2.315467e+01
-bids_per_country    4.047429e+01   1.809891e+02
-bids_per_device     1.235731e+01   1.003713e+02
-bids_per_ip         8.693291e+00   6.039463e+01
-bids_per_url        1.562716e+01   1.167530e+02
-mean_resp           3.395101e+12   5.332332e+10
-
-
-As you can see from the table, most of the variables come out to be significant. 
-
-## Creating the training data
+Creating the training data
+--------------------------
 
 The features I have created can be summarised below:
 
-1. Total bids for each bidder
+1.  Total bids for each bidder
 
-2. Total auctions for each bidder
+2.  Total auctions for each bidder
 
-3. Total countries for each bidder
+3.  Total countries for each bidder
 
-4. Total urls for each bidder
+4.  Total urls for each bidder
 
-5. Total devices for each bidder
+5.  Total devices for each bidder
 
-6. Total merchanise for each bidder
+6.  Total merchanise for each bidder
 
-7. Total ips for each bidder
+7.  Total ips for each bidder
 
-8. Mean difference of time between two consecutive bids
+8.  Mean difference of time between two consecutive bids
 
-9. Mean number bids per auction for each bidder
+9.  Mean number bids per auction for each bidder
 
 10. Mean number bids per country for each bidder
 
@@ -322,670 +311,1497 @@ The features I have created can be summarised below:
 
 13. Mean number bids per url for each bidder
 
+<!-- -->
 
+    bidder_id <- train$bidder_id
 
-```r
-bidder_id <- train$bidder_id
+    outcome <- train$outcome
 
-outcome <- train$outcome
+    nb_bids <- group_by(bid_train,bidder_id) %>%
+        summarize(nb_bids = n_distinct(bid_id)) %>%
+        select(nb_bids)
+     
+    nb_auctions <- group_by(bid_train,bidder_id) %>%
+        summarize(nb_auctions = n_distinct(auction)) %>%
+        select(nb_auctions)
+              
+    nb_merchandise <- group_by(bid_train,bidder_id) %>%         
+        summarize(nb_merchandise = n_distinct(merchandise)) %>%
+        select(nb_merchandise)
 
-nb_bids <- group_by(bid_train,bidder_id) %>%
-    summarize(nb_bids = n_distinct(bid_id)) %>%
-    select(nb_bids)
- 
-nb_auctions <- group_by(bid_train,bidder_id) %>%
-    summarize(nb_auctions = n_distinct(auction)) %>%
-    select(nb_auctions)
-          
-nb_merchandise <- group_by(bid_train,bidder_id) %>%         
-    summarize(nb_merchandise = n_distinct(merchandise)) %>%
-    select(nb_merchandise)
+    nb_devices <- group_by(bid_train,bidder_id) %>%
+        summarize(nb_devices = n_distinct(device)) %>%
+        select(nb_devices)
 
-nb_devices <- group_by(bid_train,bidder_id) %>%
-    summarize(nb_devices = n_distinct(device)) %>%
-    select(nb_devices)
+    nb_countries <- group_by(bid_train,bidder_id) %>%
+        summarize(nb_countries = n_distinct(country)) %>%
+        select(nb_countries)
 
-nb_countries <- group_by(bid_train,bidder_id) %>%
-    summarize(nb_countries = n_distinct(country)) %>%
-    select(nb_countries)
+    nb_ips <- group_by(bid_train,bidder_id) %>%
+        summarize(nb_ips = n_distinct(ip)) %>%
+        select(nb_ips)
 
-nb_ips <- group_by(bid_train,bidder_id) %>%
-    summarize(nb_ips = n_distinct(ip)) %>%
-    select(nb_ips)
+    nb_urls <- group_by(bid_train,bidder_id) %>%
+        summarize(nb_urls = n_distinct(url)) %>%
+        select(nb_urls)
 
-nb_urls <- group_by(bid_train,bidder_id) %>%
-    summarize(nb_urls = n_distinct(url)) %>%
-    select(nb_urls)
+    bid_inter_time <- group_by(bid_train,bidder_id) %>%
+        summarise(inter_time = mean(diff(time))) %>%
+        select(inter_time)
 
-bid_inter_time <- group_by(bid_train,bidder_id) %>%
-    summarise(inter_time = mean(diff(time))) %>%
-    select(inter_time)
+    bids_per_auction <- group_by(bid_train,bidder_id,auction) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(bidder_id) %>%
+        summarise(bids_per_auction = mean(nb_bids)) %>% select(bids_per_auction)
 
-bids_per_auction <- group_by(bid_train,bidder_id,auction) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(bidder_id) %>%
-    summarise(bids_per_auction = mean(nb_bids)) %>% select(bids_per_auction)
+    bids_per_country <- group_by(bid_train,bidder_id,country) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(bidder_id) %>%
+        summarise(bids_per_country = mean(nb_bids)) %>% select(bids_per_country)
 
-bids_per_country <- group_by(bid_train,bidder_id,country) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(bidder_id) %>%
-    summarise(bids_per_country = mean(nb_bids)) %>% select(bids_per_country)
+    bids_per_device <- group_by(bid_train,bidder_id,device) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(bidder_id) %>%
+        summarise(bids_per_device = mean(nb_bids)) %>% select(bids_per_device)
 
-bids_per_device <- group_by(bid_train,bidder_id,device) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(bidder_id) %>%
-    summarise(bids_per_device = mean(nb_bids)) %>% select(bids_per_device)
+    bids_per_ip <- group_by(bid_train,bidder_id,ip) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(bidder_id) %>%
+        summarise(bids_per_ip = mean(nb_bids)) %>% select(bids_per_ip)
 
-bids_per_ip <- group_by(bid_train,bidder_id,ip) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(bidder_id) %>%
-    summarise(bids_per_ip = mean(nb_bids)) %>% select(bids_per_ip)
+    bids_per_url <- group_by(bid_train,bidder_id,url) %>% 
+        summarise(nb_bids = n_distinct(bid_id)) %>% 
+        group_by(bidder_id) %>%
+        summarise(bids_per_url = mean(nb_bids)) %>% select(bids_per_url)
 
-bids_per_url <- group_by(bid_train,bidder_id,url) %>% 
-    summarise(nb_bids = n_distinct(bid_id)) %>% 
-    group_by(bidder_id) %>%
-    summarise(bids_per_url = mean(nb_bids)) %>% select(bids_per_url)
+    training <- data.frame(nb_bids,nb_auctions,nb_devices,nb_countries,
+                nb_ips,bid_inter_time,bids_per_auction,bids_per_country,bids_per_device,
+                           bids_per_ip,bids_per_url,outcome)
 
-training <- data.frame(nb_bids,nb_auctions,nb_devices,nb_countries,
-            nb_ips,bid_inter_time,bids_per_auction,bids_per_country,bids_per_device,
-                       bids_per_ip,bids_per_url,outcome)
-```
+Now we can look at the variables to see if they look as differentiators.
+For example:
 
-Now we can look at the variables to see if they look as differentiators. For example:
+    plot(density(training[training$outcome==0,"nb_bids"]), xlim=range(0:5000), main="average number of bids", xlab = "nb_bids", ylab = "density", yaxt='n', lwd=2)
+    par(new=TRUE)
+    plot(density(training[training$outcome==1,"nb_bids"]), xlim=range(0:5000), main="average number of bids", xlab = "nb_bids", ylab = "density", yaxt='n',col="red", lwd=2)
+    legend(x="topright", c("Human","Robot"), lty=c(1,1), lwd=c(2.5,2.5), col=c("black","red"))
 
+![](Codebook_files/figure-markdown_strict/unnamed-chunk-23-1.png)
 
-```r
-plot(density(training[training$outcome==0,"nb_bids"]), xlim=range(0:5000), main="average number of bids", xlab = "nb_bids", ylab = "density", yaxt='n', lwd=2)
-par(new=TRUE)
-plot(density(training[training$outcome==1,"nb_bids"]), xlim=range(0:5000), main="average number of bids", xlab = "nb_bids", ylab = "density", yaxt='n',col="red", lwd=2)
-legend(x="topright", c("Human","Robot"), lty=c(1,1), lwd=c(2.5,2.5), col=c("black","red"))
-```
+    plot(density(training[training$outcome==0,"bids_per_auction"]), xlim=range(0:50), main="average number of bids per auction", xlab = "bids_per_auction", ylab = "density", yaxt='n', lwd=2)
+    par(new=TRUE)
+    plot(density(training[training$outcome==1,"bids_per_auction"]), xlim=range(0:50), main="average number of bids per auction", xlab = "bids_per_auction", ylab = "density", yaxt='n',col="red", lwd=2)
+    legend(x="topright", c("Human","Robot"), lty=c(1,1), lwd=c(2.5,2.5), col=c("black","red"))
 
-![](Codebook_files/figure-html/unnamed-chunk-23-1.png)<!-- -->
-
-
-```r
-plot(density(training[training$outcome==0,"bids_per_auction"]), xlim=range(0:50), main="average number of bids per auction", xlab = "bids_per_auction", ylab = "density", yaxt='n', lwd=2)
-par(new=TRUE)
-plot(density(training[training$outcome==1,"bids_per_auction"]), xlim=range(0:50), main="average number of bids per auction", xlab = "bids_per_auction", ylab = "density", yaxt='n',col="red", lwd=2)
-legend(x="topright", c("Human","Robot"), lty=c(1,1), lwd=c(2.5,2.5), col=c("black","red"))
-```
-
-![](Codebook_files/figure-html/unnamed-chunk-24-1.png)<!-- -->
+![](Codebook_files/figure-markdown_strict/unnamed-chunk-24-1.png)
 
 ### Shuffle training dataset
 
+    options(width = 160)
 
-```r
-options(width = 160)
+    training <- training[sample(seq_len(nrow(training))),]
 
-training <- training[sample(seq_len(nrow(training))),]
+    kable(training[1:20,])
 
-kable(training[1:20,])
-```
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th align="right">nb_bids</th>
+<th align="right">nb_auctions</th>
+<th align="right">nb_devices</th>
+<th align="right">nb_countries</th>
+<th align="right">nb_ips</th>
+<th align="right">inter_time</th>
+<th align="right">bids_per_auction</th>
+<th align="right">bids_per_country</th>
+<th align="right">bids_per_device</th>
+<th align="right">bids_per_ip</th>
+<th align="right">bids_per_url</th>
+<th align="left">outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1439</td>
+<td align="right">652</td>
+<td align="right">234</td>
+<td align="right">182</td>
+<td align="right">40</td>
+<td align="right">479</td>
+<td align="right">1.187109e+11</td>
+<td align="right">2.786325</td>
+<td align="right">16.300000</td>
+<td align="right">3.582418</td>
+<td align="right">1.361169</td>
+<td align="right">3.449735</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>1176</td>
+<td align="right">4</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">3.512965e+12</td>
+<td align="right">2.000000</td>
+<td align="right">2.000000</td>
+<td align="right">2.000000</td>
+<td align="right">2.000000</td>
+<td align="right">2.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>244</td>
+<td align="right">776</td>
+<td align="right">112</td>
+<td align="right">129</td>
+<td align="right">15</td>
+<td align="right">333</td>
+<td align="right">9.970316e+10</td>
+<td align="right">6.928571</td>
+<td align="right">51.733333</td>
+<td align="right">6.015504</td>
+<td align="right">2.330330</td>
+<td align="right">18.476191</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>462</td>
+<td align="right">3</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">3</td>
+<td align="right">3.409292e+13</td>
+<td align="right">3.000000</td>
+<td align="right">3.000000</td>
+<td align="right">3.000000</td>
+<td align="right">1.000000</td>
+<td align="right">3.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>722</td>
+<td align="right">17</td>
+<td align="right">11</td>
+<td align="right">13</td>
+<td align="right">4</td>
+<td align="right">14</td>
+<td align="right">8.354375e+11</td>
+<td align="right">1.545454</td>
+<td align="right">4.250000</td>
+<td align="right">1.307692</td>
+<td align="right">1.214286</td>
+<td align="right">1.888889</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>138</td>
+<td align="right">16</td>
+<td align="right">14</td>
+<td align="right">15</td>
+<td align="right">7</td>
+<td align="right">15</td>
+<td align="right">8.776632e+11</td>
+<td align="right">1.142857</td>
+<td align="right">2.285714</td>
+<td align="right">1.066667</td>
+<td align="right">1.066667</td>
+<td align="right">1.454546</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>1857</td>
+<td align="right">9</td>
+<td align="right">5</td>
+<td align="right">4</td>
+<td align="right">1</td>
+<td align="right">7</td>
+<td align="right">8.902822e+12</td>
+<td align="right">1.800000</td>
+<td align="right">9.000000</td>
+<td align="right">2.250000</td>
+<td align="right">1.285714</td>
+<td align="right">9.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>273</td>
+<td align="right">16</td>
+<td align="right">14</td>
+<td align="right">6</td>
+<td align="right">6</td>
+<td align="right">12</td>
+<td align="right">4.871835e+12</td>
+<td align="right">1.142857</td>
+<td align="right">2.666667</td>
+<td align="right">2.666667</td>
+<td align="right">1.333333</td>
+<td align="right">16.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>1611</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">4.979263e+12</td>
+<td align="right">1.000000</td>
+<td align="right">1.000000</td>
+<td align="right">1.000000</td>
+<td align="right">1.000000</td>
+<td align="right">1.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>189</td>
+<td align="right">985</td>
+<td align="right">230</td>
+<td align="right">418</td>
+<td align="right">17</td>
+<td align="right">980</td>
+<td align="right">1.385034e+10</td>
+<td align="right">4.282609</td>
+<td align="right">57.941176</td>
+<td align="right">2.356459</td>
+<td align="right">1.005102</td>
+<td align="right">19.700000</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>257</td>
+<td align="right">4</td>
+<td align="right">2</td>
+<td align="right">3</td>
+<td align="right">1</td>
+<td align="right">3</td>
+<td align="right">3.354807e+12</td>
+<td align="right">2.000000</td>
+<td align="right">4.000000</td>
+<td align="right">1.333333</td>
+<td align="right">1.333333</td>
+<td align="right">1.333333</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>127</td>
+<td align="right">5434</td>
+<td align="right">413</td>
+<td align="right">443</td>
+<td align="right">52</td>
+<td align="right">3677</td>
+<td align="right">1.422869e+10</td>
+<td align="right">13.157385</td>
+<td align="right">104.500000</td>
+<td align="right">12.266366</td>
+<td align="right">1.477835</td>
+<td align="right">2.824324</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>1283</td>
+<td align="right">7</td>
+<td align="right">6</td>
+<td align="right">3</td>
+<td align="right">2</td>
+<td align="right">6</td>
+<td align="right">1.146604e+13</td>
+<td align="right">1.166667</td>
+<td align="right">3.500000</td>
+<td align="right">2.333333</td>
+<td align="right">1.166667</td>
+<td align="right">7.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>578</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">NaN</td>
+<td align="right">1.000000</td>
+<td align="right">1.000000</td>
+<td align="right">1.000000</td>
+<td align="right">1.000000</td>
+<td align="right">1.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>105</td>
+<td align="right">46</td>
+<td align="right">30</td>
+<td align="right">32</td>
+<td align="right">16</td>
+<td align="right">41</td>
+<td align="right">2.922526e+11</td>
+<td align="right">1.533333</td>
+<td align="right">2.875000</td>
+<td align="right">1.437500</td>
+<td align="right">1.121951</td>
+<td align="right">2.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>1772</td>
+<td align="right">14</td>
+<td align="right">13</td>
+<td align="right">11</td>
+<td align="right">4</td>
+<td align="right">14</td>
+<td align="right">5.899012e+12</td>
+<td align="right">1.076923</td>
+<td align="right">3.500000</td>
+<td align="right">1.272727</td>
+<td align="right">1.000000</td>
+<td align="right">4.666667</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>555</td>
+<td align="right">1165</td>
+<td align="right">103</td>
+<td align="right">166</td>
+<td align="right">37</td>
+<td align="right">414</td>
+<td align="right">1.171744e+10</td>
+<td align="right">11.310680</td>
+<td align="right">31.486487</td>
+<td align="right">7.018072</td>
+<td align="right">2.814010</td>
+<td align="right">1.378698</td>
+<td align="left">1</td>
+</tr>
+<tr class="even">
+<td>1073</td>
+<td align="right">76</td>
+<td align="right">1</td>
+<td align="right">3</td>
+<td align="right">1</td>
+<td align="right">72</td>
+<td align="right">1.288063e+11</td>
+<td align="right">76.000000</td>
+<td align="right">76.000000</td>
+<td align="right">25.333333</td>
+<td align="right">1.055556</td>
+<td align="right">76.000000</td>
+<td align="left">0</td>
+</tr>
+<tr class="odd">
+<td>1432</td>
+<td align="right">29</td>
+<td align="right">19</td>
+<td align="right">19</td>
+<td align="right">3</td>
+<td align="right">19</td>
+<td align="right">2.618870e+12</td>
+<td align="right">1.526316</td>
+<td align="right">9.666667</td>
+<td align="right">1.526316</td>
+<td align="right">1.526316</td>
+<td align="right">1.812500</td>
+<td align="left">0</td>
+</tr>
+<tr class="even">
+<td>1144</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">7.242105e+10</td>
+<td align="right">1.000000</td>
+<td align="right">2.000000</td>
+<td align="right">2.000000</td>
+<td align="right">2.000000</td>
+<td align="right">2.000000</td>
+<td align="left">0</td>
+</tr>
+</tbody>
+</table>
 
-        nb_bids   nb_auctions   nb_devices   nb_countries   nb_ips     inter_time   bids_per_auction   bids_per_country   bids_per_device   bids_per_ip   bids_per_url  outcome 
------  --------  ------------  -----------  -------------  -------  -------------  -----------------  -----------------  ----------------  ------------  -------------  --------
-866        3510           258          351             32     2220   2.197038e+10          13.604651         109.687500         10.000000      1.581081       3.323864  0       
-363           7             6            7              5        6   1.544219e+12           1.166667           1.400000          1.000000      1.166667       1.166667  0       
-177          67            36           40             16       53   1.995175e+11           1.861111           4.187500          1.675000      1.264151       3.526316  0       
-639           1             1            1              1        1            NaN           1.000000           1.000000          1.000000      1.000000       1.000000  0       
-543        3137           352          540             80     1771   4.345428e+09           8.911932          39.212500          5.809259      1.771316       2.737347  0       
-1618        133            45           51              6       64   1.018716e+11           2.955556          22.166667          2.607843      2.078125       1.900000  0       
-979           6             4            2              2        2   1.037895e+10           1.500000           3.000000          3.000000      3.000000       1.000000  0       
-360        1457           375          499             19     1433   5.304497e+10           3.885333          76.684211          2.919840      1.016748      29.140000  0       
-1099       3113           168          171             46      514   4.327324e+09          18.529762          67.673913         18.204678      6.056420       3.688389  1       
-109          41            18           26              1       12   3.350276e+11           2.277778          41.000000          1.576923      3.416667       2.157895  0       
-432           2             2            2              2        2   6.523684e+12           1.000000           1.000000          1.000000      1.000000       1.000000  0       
-1483        156            51           49              1      107   4.975535e+11           3.058823         156.000000          3.183673      1.457944      31.200000  0       
-265         265           109          105             15      176   2.914912e+11           2.431193          17.666667          2.523810      1.505682       4.568966  0       
-1916          1             1            1              1        1            NaN           1.000000           1.000000          1.000000      1.000000       1.000000  0       
-416           2             1            2              1        2   3.129158e+12           2.000000           2.000000          1.000000      1.000000       1.000000  0       
-784         425            39            4              3      340   2.157696e+10          10.897436         141.666667        106.250000      1.250000       1.507092  1       
-1794         45            42           27             10       31   1.737671e+12           1.071429           4.500000          1.666667      1.451613       1.800000  0       
-1673        158            36           70              4      128   4.885394e+11           4.388889          39.500000          2.257143      1.234375       3.098039  0       
-483          85            52           35             11       66   9.187043e+11           1.634615           7.727273          2.428571      1.287879       1.370968  0       
-1588      47546           676         1014             48    11365   1.625911e+09          70.334320         990.541667         46.889546      4.183546       2.160887  0       
+### Repeat for Testing
 
-### Repeat for Testing 
+    source("Analysis_testing.R")
 
+Classification
+--------------
 
-```r
-source("Analysis_testing.R")
-```
-
-
-## Classification
-
-The test problem used here is a binary classification. I will be using the caret package in R as it provides an excellent interface into hundreds of different machine learning algorithms and useful tools for evaluating and comparing models.
+The test problem used here is a binary classification. I will be using
+the caret package in R as it provides an excellent interface into
+hundreds of different machine learning algorithms and useful tools for
+evaluating and comparing models.
 
 The test harness is comprised of three key elements:
-    
-* The dataset we will use to train models.
-* The test options used to evaluate a model (e.g. resampling method).
-* The metric we are interested in measuring and comparing.
 
+-   The dataset we will use to train models.
+-   The test options used to evaluate a model (e.g. resampling method).
+-   The metric we are interested in measuring and comparing.
 
-```r
-library(caret)
-```
+<!-- -->
 
-```
-## Loading required package: lattice
-```
+    library(caret)
 
-```
-## Loading required package: ggplot2
-```
+    ## Loading required package: lattice
+
+    ## Loading required package: ggplot2
 
 ### Parallel Processing
 
-R supports parallel computations with the core parallel package. What the doParallel package does is provide a backend while utilizing the core parallel package. The caret package is used for developing and testing machine learning models in R. This package as well as others like plyr support multicore CPU speedups if a parallel backend is registered before the supported instructions are called.
+R supports parallel computations with the core parallel package. What
+the doParallel package does is provide a backend while utilizing the
+core parallel package. The caret package is used for developing and
+testing machine learning models in R. This package as well as others
+like plyr support multicore CPU speedups if a parallel backend is
+registered before the supported instructions are called.
 
+    library(doParallel)
 
-```r
-library(doParallel)
-```
+    ## Loading required package: foreach
 
-```
-## Loading required package: foreach
-```
+    ## Loading required package: iterators
 
-```
-## Loading required package: iterators
-```
+    ## Loading required package: parallel
 
-```
-## Loading required package: parallel
-```
-
-```r
-cl <- makeCluster(detectCores())
-registerDoParallel(cl)
-```
-
+    cl <- makeCluster(detectCores())
+    registerDoParallel(cl)
 
 ### Cross Validation Options
 
-Here, We usually randomly split the data into K distinct blocks of roughly equal size.
+Here, We usually randomly split the data into K distinct blocks of
+roughly equal size.
 
-* We leave out the first block of data and fit a model.
-* This model is used to predict the held-out block
-* We continue this process until we’ve predicted all K held–out blocks
+-   We leave out the first block of data and fit a model.
+-   This model is used to predict the held-out block
+-   We continue this process until we’ve predicted all K held–out blocks
 
-The final performance is based on the hold-out predictions K is usually taken to be 5 or 10 and leave one out cross–validation has each sample as a block Repeated K–fold CV creates multiple versions of the folds and aggregates the results.
+The final performance is based on the hold-out predictions K is usually
+taken to be 5 or 10 and leave one out cross–validation has each sample
+as a block Repeated K–fold CV creates multiple versions of the folds and
+aggregates the results.
 
 In this case study I will use 10-fold cross validation with 3 repeats.
 
-
-```r
-control <- trainControl(method="repeatedcv", number=10, repeats=3)
-seed <- 7
-```
+    control <- trainControl(method="repeatedcv", number=10, repeats=3)
+    seed <- 7
 
 ### Test Metric
 
-There are many possible evaluation metrics to chose from. Caret provides a good selection and you can use your own if needed. Some good test metrics to use for classification include:
-    
-* Accuracy
-* Kappa
-* ROC
+There are many possible evaluation metrics to chose from. Caret provides
+a good selection and you can use your own if needed. Some good test
+metrics to use for classification include:
 
-The evaluation metric is specified the call to the train() function for a given model, so I will define the metric now for use with all of the model training later.
+-   Accuracy
+-   Kappa
+-   ROC
 
+The evaluation metric is specified the call to the train() function for
+a given model, so I will define the metric now for use with all of the
+model training later.
 
-```r
-metric <- "Accuracy"
-```
+    metric <- "Accuracy"
 
 ### Model Building
 
 There are three concerns when selecting models to spot check:
-    
-* What models to actually choose.
-* How to configure their arguments.
-* Preprocessing of the data for the algorithm.
+
+-   What models to actually choose.
+-   How to configure their arguments.
+-   Preprocessing of the data for the algorithm.
 
 ### Algorithm
 
-It is important to have a good mix of algorithm representations (lines, trees, instances, etc.) as well as algorithms for learning those representations.
+It is important to have a good mix of algorithm representations (lines,
+trees, instances, etc.) as well as algorithms for learning those
+representations.
 
-Almost all machine learning algorithms are parameterized, requiring that you specify their arguments.
+Almost all machine learning algorithms are parameterized, requiring that
+you specify their arguments.
 
-One aspect of the caret package in R is that it helps with tuning algorithm parameters. It can also estimate good defaults (via the automatic tuning functionality and the tunelength argument to the train() function).
+One aspect of the caret package in R is that it helps with tuning
+algorithm parameters. It can also estimate good defaults (via the
+automatic tuning functionality and the tunelength argument to the
+train() function).
 
 ### Data Preprocessing
 
-Some algorithms perform a whole lot better with some basic data preprocessing. Fortunately, the train() function in caret lets you specify preprocessing of the data to perform prior to training. The transforms you need are provided to the preProcess argument as a list and are executed on the data sequentially
+Some algorithms perform a whole lot better with some basic data
+preprocessing. Fortunately, the train() function in caret lets you
+specify preprocessing of the data to perform prior to training. The
+transforms you need are provided to the preProcess argument as a list
+and are executed on the data sequentially
 
-The most useful transform is to scale and center the data via. For example:
-    
+The most useful transform is to scale and center the data via. For
+example:
 
-```r
-preProcess=c("center", "scale")
-```
-### Training 
+    preProcess=c("center", "scale")
 
+### Training
 
+    # Logistic Regression
 
-```r
-# Logistic Regression
+    set.seed(seed)
+    fit.glm <- train(outcome~., data=training, method="glm", metric=metric, trControl=control, na.action=na.exclude)
 
-set.seed(seed)
-fit.glm <- train(outcome~., data=training, method="glm", metric=metric, trControl=control, na.action=na.exclude)
-```
+    ## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred
 
-```
-## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred
-```
+    # SVM Radial
 
-```r
-# SVM Radial
+    set.seed(seed)
+    fit.svmRadial <- train(outcome~., data=training, method="svmRadial", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE, na.action=na.exclude)
 
-set.seed(seed)
-fit.svmRadial <- train(outcome~., data=training, method="svmRadial", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE, na.action=na.exclude)
-```
+    ## Loading required package: kernlab
 
-```
-## Loading required package: kernlab
-```
+    ## 
+    ## Attaching package: 'kernlab'
 
-```
-## 
-## Attaching package: 'kernlab'
-```
+    ## The following object is masked from 'package:ggplot2':
+    ## 
+    ##     alpha
 
-```
-## The following object is masked from 'package:ggplot2':
-## 
-##     alpha
-```
+    # Random Forest
 
-```r
-# Random Forest
+    set.seed(seed)
+    fit.rf <- train(outcome~., data=training, method="rf", metric=metric, trControl=control, na.action=na.exclude)
 
-set.seed(seed)
-fit.rf <- train(outcome~., data=training, method="rf", metric=metric, trControl=control, na.action=na.exclude)
-```
+    ## Loading required package: randomForest
 
-```
-## Loading required package: randomForest
-```
+    ## randomForest 4.6-12
 
-```
-## randomForest 4.6-12
-```
+    ## Type rfNews() to see new features/changes/bug fixes.
 
-```
-## Type rfNews() to see new features/changes/bug fixes.
-```
+    ## 
+    ## Attaching package: 'randomForest'
 
-```
-## 
-## Attaching package: 'randomForest'
-```
+    ## The following object is masked from 'package:ggplot2':
+    ## 
+    ##     margin
 
-```
-## The following object is masked from 'package:ggplot2':
-## 
-##     margin
-```
+    ## The following object is masked from 'package:dplyr':
+    ## 
+    ##     combine
 
-```
-## The following object is masked from 'package:dplyr':
-## 
-##     combine
-```
+    # Stochastic Gradient Boosting (Generalized Boosted Modeling)
 
-```r
-# Stochastic Gradient Boosting (Generalized Boosted Modeling)
+    set.seed(seed)
+    fit.gbm <- train(outcome~., data=training, method="gbm", metric=metric, trControl=control, verbose=FALSE, na.action=na.exclude)
 
-set.seed(seed)
-fit.gbm <- train(outcome~., data=training, method="gbm", metric=metric, trControl=control, verbose=FALSE, na.action=na.exclude)
-```
+    ## Loading required package: gbm
 
-```
-## Loading required package: gbm
-```
+    ## Loading required package: survival
 
-```
-## Loading required package: survival
-```
+    ## 
+    ## Attaching package: 'survival'
 
-```
-## 
-## Attaching package: 'survival'
-```
+    ## The following object is masked from 'package:caret':
+    ## 
+    ##     cluster
 
-```
-## The following object is masked from 'package:caret':
-## 
-##     cluster
-```
+    ## Loading required package: splines
 
-```
-## Loading required package: splines
-```
+    ## Loaded gbm 2.1.1
 
-```
-## Loaded gbm 2.1.1
-```
+    ## Loading required package: plyr
 
-```
-## Loading required package: plyr
-```
+    ## --------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-```
-## --------------------------------------------------------------------------------------------------------------------------------------------------------------
-```
+    ## You have loaded plyr after dplyr - this is likely to cause problems.
+    ## If you need functions from both plyr and dplyr, please load plyr first, then dplyr:
+    ## library(plyr); library(dplyr)
 
-```
-## You have loaded plyr after dplyr - this is likely to cause problems.
-## If you need functions from both plyr and dplyr, please load plyr first, then dplyr:
-## library(plyr); library(dplyr)
-```
+    ## --------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-```
-## --------------------------------------------------------------------------------------------------------------------------------------------------------------
-```
+    ## 
+    ## Attaching package: 'plyr'
 
-```
-## 
-## Attaching package: 'plyr'
-```
-
-```
-## The following objects are masked from 'package:dplyr':
-## 
-##     arrange, count, desc, failwith, id, mutate, rename, summarise, summarize
-```
+    ## The following objects are masked from 'package:dplyr':
+    ## 
+    ##     arrange, count, desc, failwith, id, mutate, rename, summarise, summarize
 
 ### Model Selection
 
+    results <- resamples(list(logistic=fit.glm, svm=fit.svmRadial,rf=fit.rf, gbm=fit.gbm))
 
-```r
-results <- resamples(list(logistic=fit.glm, svm=fit.svmRadial,rf=fit.rf, gbm=fit.gbm))
+    summary(results)
 
-summary(results)
-```
+    ## 
+    ## Call:
+    ## summary.resamples(object = results)
+    ## 
+    ## Models: logistic, svm, rf, gbm 
+    ## Number of resamples: 30 
+    ## 
+    ## Accuracy 
+    ##            Min. 1st Qu. Median   Mean 3rd Qu.   Max. NA's
+    ## logistic 0.9231  0.9346 0.9405 0.9398  0.9448 0.9583    0
+    ## svm      0.9345  0.9405 0.9464 0.9453  0.9467 0.9581    0
+    ## rf       0.9345  0.9478 0.9554 0.9544  0.9629 0.9704    0
+    ## gbm      0.9286  0.9464 0.9524 0.9521  0.9583 0.9820    0
+    ## 
+    ## Kappa 
+    ##              Min.  1st Qu. Median    Mean 3rd Qu.   Max. NA's
+    ## logistic -0.02024 -0.01088 0.0000 0.08921  0.1710 0.3510    0
+    ## svm      -0.01094  0.00000 0.1729 0.12030  0.1729 0.3509    0
+    ## rf       -0.01094  0.27430 0.4463 0.40260  0.5563 0.6908    0
+    ## gbm      -0.02024  0.30260 0.4434 0.40800  0.5101 0.7910    0
 
-```
-## 
-## Call:
-## summary.resamples(object = results)
-## 
-## Models: logistic, svm, rf, gbm 
-## Number of resamples: 30 
-## 
-## Accuracy 
-##            Min. 1st Qu. Median   Mean 3rd Qu.   Max. NA's
-## logistic 0.9048  0.9362 0.9408 0.9392  0.9464 0.9524    0
-## svm      0.9345  0.9406 0.9435 0.9443  0.9464 0.9527    0
-## rf       0.9408  0.9464 0.9524 0.9536  0.9583 0.9762    0
-## gbm      0.9345  0.9465 0.9524 0.9526  0.9583 0.9645    0
-## 
-## Kappa 
-##              Min. 1st Qu. Median    Mean 3rd Qu.   Max. NA's
-## logistic -0.04673  0.0000 0.0000 0.08474  0.1710 0.3754    0
-## svm      -0.01094  0.0000 0.0000 0.08894  0.1729 0.3199    0
-## rf        0.16560  0.2881 0.3631 0.39070  0.4691 0.7383    0
-## gbm       0.14980  0.2882 0.4258 0.39280  0.5123 0.6482    0
-```
+It is also useful to review the results using a few different
+visualization techniques to get an idea of the mean and spread of
+accuracies.
 
-It is also useful to review the results using a few different visualization techniques to get an idea of the mean and spread of accuracies.
+    # boxplot comparison
+    bwplot(results)
 
+![](Codebook_files/figure-markdown_strict/unnamed-chunk-33-1.png)
 
-```r
-# boxplot comparison
-bwplot(results)
-```
+    # Dot-plot comparison
+    dotplot(results)
 
-![](Codebook_files/figure-html/unnamed-chunk-33-1.png)<!-- -->
-
-```r
-# Dot-plot comparison
-dotplot(results)
-```
-
-![](Codebook_files/figure-html/unnamed-chunk-33-2.png)<!-- -->
+![](Codebook_files/figure-markdown_strict/unnamed-chunk-33-2.png)
 
 ### Prediction on Testing Model
 
-We choose to predict using the gbm algorithm 
+We choose to predict using the gbm algorithm
 
-```r
-outcome_probs <- predict(fit.gbm, newdata = testing, type = "prob",na.action = na.pass)
-outcome_class <- predict(fit.gbm, newdata = testing, type = "raw",na.action = na.pass)
+    outcome_probs <- predict(fit.gbm, newdata = testing, type = "prob",na.action = na.pass)
+    outcome_class <- predict(fit.gbm, newdata = testing, type = "raw",na.action = na.pass)
 
-Submission <- cbind(bidder_id_t, predicted_outcome = factor(outcome_class, label=c("Human","Robot")))
+    Submission <- cbind(bidder_id_t, predicted_outcome = factor(outcome_class, label=c("Human","Robot")))
 
-write.csv(Submission,'Submission.csv')
-```
+    write.csv(Submission,'Submission.csv')
 
 The predicted outcome of the first 200 bidders in the test dataset
 
+    kable(Submission[1:200,])
 
-```r
-kable(Submission[1:200,])
-```
+<table>
+<thead>
+<tr class="header">
+<th align="left">bidder_id</th>
+<th align="left">predicted_outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">002d229ffb247009810828f648afc2ef593rb</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">003180b29c6a5f8f1d84a6b7b6f7be57tjj1o</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">00486a11dff552c4bd7696265724ff81yeo9v</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0051aef3fdeacdadba664b9b3b07e04e4coc6</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0053b78cde37c4384a20d2da9aa4272aym4pb</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0061edfc5b07ff3d70d693883a38d370oy4fs</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">00862324eb508ca5202b6d4e5f1a80fc3t3lp</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">009479273c288b1dd096dc3087653499lrx3c</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">009cee781e8414f7fb55b2f92157e9dbu0y6o</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">00a79ebd15f0b24a0a3b5794457cd8ed7dng1</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">00b519ec8ed5e370328451379bb708a306eoj</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">00ceb1b66fc6c08f2e1b7937b5bc7f870qn5k</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">00dd948c3a88f7b68f1952dbeeac68ffb6qoc</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">00e0f614d9dd32dd27f6080f472d2934emlos</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">010e5ed5eb439e0daf1870a0b426e32cztbdt</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0113d101ec6aabd354adac645a1ec3e82ln88</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0165dcd38f54e83aafb7bb3d95cd9369800km</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">016e3c511caf01a845c9c976bbf355a6m1nns</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0176025cc599cb59f825d592b8ef3ee3p5aqv</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">018c9ecc065880c95e21c0291a3b478dj1c0a</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0196137a75792cfa9e1ffae0c968f8e5h5eqq</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">019cf2d366df756c092c91e26f406acdozha7</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">01a2f136b87e5c544e2f2c59295bea7ebwv8y</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">01c729a32b5f51f088884b558cd2cfd1xz1qe</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">01d5348d4d4472288c0c458d8630504165r4k</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">01e4994f0a29fa76c7595fe3929bec777acv0</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">01ecfeb5d9946423c7fb088a84fe77c3smw4c</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0204227c6c8042ec8d8cc1bacb0d44b1csycb</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">02127cccff7c56391882f1d58dd960fchwfua</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">023d51d2bcf7d962c766ff570fa7a21ds3c96</td>
+<td align="left">Robot</td>
+</tr>
+<tr class="odd">
+<td align="left">024b9e2d822424b09ddf86b2a9cf8614a0uwy</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">024d6a4a489d4411f795d04b6617d1f47qvrs</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">02518a364d87661eed1453e251933862yvmjj</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">02615aa755c78f1812d7f772f4ed3d8anist8</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">02857858772bd4320632bf6a51e02f6ejw6au</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0294102fd936228343828f48c7f2b270dklg3</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">02a28b9de21bcb744bc2a7dedc008f91pbcpc</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">02acbacd7a029481f44d5a2e2d3fb0b6xe0gx</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">02caba35d87c40ffecdb1d998d909957dx7uo</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">02db55f07b252ecff0aa4cba93880a44bv4eb</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">02de68074ee2edccf6a00dfbd3213269w7k7i</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">02fbc26f080655008337619a08cb7c04voa3c</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0306d10ab30a2f5cda41ae7ed77b8d31oehvv</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">030fe7527c9394a74f25462cc2ed5af4myezo</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">036abb8a6ba8171c3e41e16eec64e977ez1jd</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">03757ddf8a00f5c600241f3ce956ad7bfv7tw</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">038d5c12a210df3818eb8dc34ebedac2ldr62</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">03a5ac97839b407f5637ce534a0de583ygwx8</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">03b57948c18680b55b6e9ba10eeac42659hsj</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">03cac5cc349396386e833a24543980cckfhyu</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">03dd77a9a964371144e72f66e791bbe2gkphv</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">03e81f2bdfcf6f376b1deb163127eeaedmsqn</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">03ead6957061c72543b8bc35f6b23852j0a0h</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">042d1cd843d886c1bd8968e18bfa1b5b8t55o</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0430923026291636fff20fa1707fd34f0nayx</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0457e2bcdd0a06bd9c8dc3ea9b3c1a7419mgs</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">046897d78512c75febd7cd493f408632lqm40</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">04ab1fd6ed917467e808fbe3c6a126ebyusca</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">04be4b7846b32bb6445928b4cb3d16af5xwzq</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">04bffaa5e353b8a37a66767e3d9b531din3rc</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">04db33ea12bbed34ea9907f908ad2ca2gnh2s</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">04ef306fce8e66b25ecf6a78800e9776s4stl</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">04f0778852b2671aab928de427ce7a8ck7vd3</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">04f53d51a9cac9391b1d35c109294c48apax1</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">04fc5cae5e63ce4437449827e58b2614058v2</td>
+<td align="left">Robot</td>
+</tr>
+<tr class="even">
+<td align="left">05068af5ba4645de987789f5a3248cd1a9nft</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">051586c3297f5b992000048f3704550fxja6g</td>
+<td align="left">Robot</td>
+</tr>
+<tr class="even">
+<td align="left">05357eefa29d2c28f59f9e346ec64cebylh3z</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">05457a5a02ff30f21d0d16d6e987c7cdn9poc</td>
+<td align="left">Robot</td>
+</tr>
+<tr class="even">
+<td align="left">0550568ad77e8e41f2b188be324c10b8xw912</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">05606b484938640c4309fd9d286fea3fifen9</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0565d7d345ac29442b26cd9ffe2b3b841wwnb</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">057071d595b08bd00caa8e3a91eb954bhgt1q</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0578bad1a458d60f9ba0e810f7058389lz4wj</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">057a0760c7d5306786fe54af9d49ddac796rf</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">058931834bffe72041a6f046e3c7dbbepzv1e</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0590c434e36245c7983845752e73ebbdgyugm</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">05b75a11dd918ab9d9dff644219e6727vqzz5</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">05bd6eb40889047958e8b96332cc1975vib58</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">05ccfd8ca96643c468ce64c50dd01078ux33u</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">05ce81fa868e12e99ab0390d9579747b0tntg</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">05de85f05fbb6a6bf86ff6b33be7678ek3flf</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">05e5905428f5718a5cecfbde859dc689mcex9</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">05f327ba853313444da03bbc41c1cf2ac8cbo</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">05f5792216f9a5bfe91ecd0dbccc3cdceuwmf</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">05f9e773506d32bb059045cc9bf31b4187sga</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">06052ab145f8a3ddc6ad8433ef11da8dputmu</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0619a3ec37e6d49be8b9a2dd094bc8d4skgew</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">06237b976cf6ae2d3e3bea5e2d3dade4krnvu</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">064711ab52b5f3b7deac4c0465a7ee42h1uot</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">06586694c6bba2ccaa8e13354701bb30em5ro</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">068b3d3f48528027025cd31ba92c0d1bpkjdq</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0695b948daa6f8bffb8758d201c27517k50ao</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">06a984e49706c47d079c33a6e038ee9a3moip</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">06af48f3b9799398a569506d7cbfaa747k49t</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">06b9a5226231e5c03cd00c074dce0bacjod7v</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">06bbde5ca852af9ed6f2afdc6ee5bc3bko1h1</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">06cb735854688d6d03c39fe1f8fe84563y4m1</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">06dbfffbca4f34157f8a575fa535d9ad3xfwm</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">06ea8e569d68b4767725e060d3a72938iqim6</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">06ed8a1726d2a3d03c195cb219b2bbb9wbmz8</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">06ff2d37e247d28cac0e2a944e39cd6budsbx</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">070841d4774fef5fb50eca78a7156715q2hfi</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">070c705dab050bebc8c9b379045d8ae8lx62r</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">070d7aa0b0e7754e8c58194a6e2c8fc2js081</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">070f01355c418cfca4d58db04a5d5af5wuk9n</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">071300a7c3385788c00573d1c4bf150csf3cg</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">07201f701766a7ea89b36b4e7b984beap4zdc</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">074993754af952e8d582e9ff04a2bd5bh2s05</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0750cce1071adff96c9e8d417482cf762jjmb</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0751502caf4afd959c99955c80edacc85u11v</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0763e7371b763087182eb37930074ff8mj7fw</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0764308c5a1d35bf76c32d943eff07a50tp9e</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0774742ee8690973faf76efd53e66b435sakj</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">07965f31105b6ef1ab30efedbfcd66707lwrm</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">07a1eeb3bc5be386c1eb67f4bf69ad56wvkcc</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">07a5dbfbf2629ef7018abb660fe0e795xmrw3</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">07d23b0f422ef8851ad105ad659fa6492n2su</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">07d4faa935f7e83e3b8c08c34baf74a59lwb6</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">080042810884fa0937e9ddc89ca18a28jhz48</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">08078a2526666deea62ca7c065bf22c4h7i8s</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">080a1139f5575159bdca6044ae568550d8f12</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">08144977af383cb9f1d3b51ade19f35frjmwm</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">082659fb2b29eb5ae7c241393ebb76bb8wq4y</td>
+<td align="left">Robot</td>
+</tr>
+<tr class="odd">
+<td align="left">083bc8dabba83902d98f0dd986388319sryc2</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">084a25ac6da2d0997becd19eeda619c8po6d2</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">085829afe1af4c5e81563458bb288088y992x</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0865d1e207fa3728a7379c415c903133rr6ce</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">08728c61fc683905eec522c104030551y5qqh</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0875b86dd85b2cfc8727d6ae019832b870s6s</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0893eebbf5c7e431be85d18a4aad99a2mc32v</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">08c389a8a55b13d0423b5c0dba3a9b6clh1gr</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">08e14af6fbdb7aa4f3e38dcef26df601mz63o</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">08e32f3d08db3edea0fea2e8c6634c8c4iq14</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">08e89d1f541baac1ed7a0f16fcd46474ob5u9</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">08f13a984962c44d88e10f188ffc7c38yqn9o</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">08f2b08040d62a4dc55d9f65539b6090um72f</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">08f929bbb45f6101b61eeade665542bdj6ioy</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">08fdd6af0ffe017623d5dd2f3b509f598dk01</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0903c5009f3a06db04d5e40a83e04480ukuvm</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">090b3859aad1ed0dfbe857cee2ef6aac8w0kp</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">090c13aa3b9f8ff7227bfb74308e9b2e128jf</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">091415979b1bf178f6c358bca7a3d30dkct2r</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">09141d643a0021782bd040bf51cbdef4c17t5</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0918faabadfe856a25ebf1ff96b2cfaf7ez6a</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0925bab07c4d3600f2a56dc4468d243ahcuo6</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">092ceb77862ed0c120af013fe90093e64qknp</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0933e1844ef295b026b5e6ff6f4c0960jhzqr</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">094ca167823888700c962d06c82b261bdkp2a</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0956ac7abf361527a71a2c24a3f29b80ytlot</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">09790d0fc669de383256c7171ffd5143abd3f</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">097ac653dca3fe0ba83d24ebd1fd23b28ztxe</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0983ad44219dfddd5a501810f655233dur2r8</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0985bc13264dfe1af0abc65f3c0b8a96c8sl9</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">09886a694696deb1bd6c3f12c6acb08bg66sz</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">098d2373ee8e8f83c5e597f210f082e2gx9uj</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">09a5fc9ba18647d388f46f0cb134cadd838er</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">09aa1a84c7c7ba807ab6b2ea7fa2aa6dorm2y</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">09ae6f2cf493017750379a2f5763ed53wfnni</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">09ba0a844a8683d61e18f183ca23be7435vfd</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">09d99aa44268dd5c999628733fe24b7f34cag</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">09f0c22f61c5a7f643357a2e606b71677a2fa</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0a08cba9576abdd7f401ca52a50c328coo7j3</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0a0e1973ea3cba47f33b0166e9abbb4c5ndpa</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0a19c41f6163cd4dd020318ea1a14fb4uapty</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0a3591872765dc366dab4ce259874395kh6mj</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0a39721ba697f341aae5915f25a440050er1r</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0a4733c94d22a38664cff64d6859ec18y6db1</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0a584f77759fefad47820d54ffa21a24dxqqu</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0a798636852c5948e899311731439855kisj2</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0a807dffdef748a472534f0b42df4cefi0913</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0a8622c7bc8526de762f3b59c91ecbbcvpua2</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0a86a3b6549af71433eff4e733d5a19aqi2qn</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0a926caf34d9c1d78c7e5af4ba05f065m4asu</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0a9752168b19c91ec99b943a40af4c1a0b8s8</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0aba70072c70a28a41ac341bb9c41136t38g1</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0ac6f29b2269feea7d94aec032b6353adh38a</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0ad5956336240ebaa75932cf95c85a9by36tn</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0adb524d88ff4c0c6da7ed87599b34800pl1i</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0b1feb6c1cfe82dacf7634565f96ac48y5muk</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0b2f7f319c7727d3fb98cf01b4bdc5c6f9u83</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0b37699cfd1395db5454973168a5340bmp9ko</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0b4f65b31803376d777d1d935a44fcfa6d5ge</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0b5f65d28922ebbcf2ee9becd5f7dd08snxnr</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0b6c8845a6a8032ed0856636bbecd906v1ywr</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0b7b89e4e36908ddc32dfd2b46fe52dbp6by5</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0b839e3756b868b511319ff582235851nzeb7</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0b9ad98f40b4d4f3a9e5a1dd32185d18uy668</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0b9d45948078268c6394a9c51bf2db08cbijp</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0ba0e2c0a33c032cf705d7eadde0bab5j4j9e</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0bca7f1039919c1572cedda5224434f9g5j2f</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0bf21b162b2eddf37e92bf708a79b94b5e0st</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0bf40de3a66bd8a70777ece6756c6882jg7s6</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0bf6ae3f3085a90b43aa86e3c1eaff695w2jj</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0c1385603d821c3a5d91f5c291dfec2a0f7rv</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0c19bfcb25b818fb085f7b890f1c3fd0opg88</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0c2ab4132564259a0b02c5bf57b49763n2bzh</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0c3e5de44a27de84eff9f81ed777e8a7bxjyk</td>
+<td align="left">Human</td>
+</tr>
+<tr class="odd">
+<td align="left">0c44f546ed40a8ccfc2e985c6d1c624fjtj11</td>
+<td align="left">Human</td>
+</tr>
+<tr class="even">
+<td align="left">0c47587c4459baed81d0b707eff6b4bff5tmx</td>
+<td align="left">Human</td>
+</tr>
+</tbody>
+</table>
 
+    stopCluster(cl)
 
-
-bidder_id                               predicted_outcome 
---------------------------------------  ------------------
-002d229ffb247009810828f648afc2ef593rb   Human             
-003180b29c6a5f8f1d84a6b7b6f7be57tjj1o   Human             
-00486a11dff552c4bd7696265724ff81yeo9v   Human             
-0051aef3fdeacdadba664b9b3b07e04e4coc6   Human             
-0053b78cde37c4384a20d2da9aa4272aym4pb   Human             
-0061edfc5b07ff3d70d693883a38d370oy4fs   Human             
-00862324eb508ca5202b6d4e5f1a80fc3t3lp   Human             
-009479273c288b1dd096dc3087653499lrx3c   Human             
-009cee781e8414f7fb55b2f92157e9dbu0y6o   Human             
-00a79ebd15f0b24a0a3b5794457cd8ed7dng1   Human             
-00b519ec8ed5e370328451379bb708a306eoj   Human             
-00ceb1b66fc6c08f2e1b7937b5bc7f870qn5k   Human             
-00dd948c3a88f7b68f1952dbeeac68ffb6qoc   Human             
-00e0f614d9dd32dd27f6080f472d2934emlos   Human             
-010e5ed5eb439e0daf1870a0b426e32cztbdt   Human             
-0113d101ec6aabd354adac645a1ec3e82ln88   Human             
-0165dcd38f54e83aafb7bb3d95cd9369800km   Human             
-016e3c511caf01a845c9c976bbf355a6m1nns   Human             
-0176025cc599cb59f825d592b8ef3ee3p5aqv   Human             
-018c9ecc065880c95e21c0291a3b478dj1c0a   Human             
-0196137a75792cfa9e1ffae0c968f8e5h5eqq   Human             
-019cf2d366df756c092c91e26f406acdozha7   Human             
-01a2f136b87e5c544e2f2c59295bea7ebwv8y   Human             
-01c729a32b5f51f088884b558cd2cfd1xz1qe   Human             
-01d5348d4d4472288c0c458d8630504165r4k   Human             
-01e4994f0a29fa76c7595fe3929bec777acv0   Human             
-01ecfeb5d9946423c7fb088a84fe77c3smw4c   Human             
-0204227c6c8042ec8d8cc1bacb0d44b1csycb   Human             
-02127cccff7c56391882f1d58dd960fchwfua   Human             
-023d51d2bcf7d962c766ff570fa7a21ds3c96   Human             
-024b9e2d822424b09ddf86b2a9cf8614a0uwy   Human             
-024d6a4a489d4411f795d04b6617d1f47qvrs   Robot             
-02518a364d87661eed1453e251933862yvmjj   Human             
-02615aa755c78f1812d7f772f4ed3d8anist8   Human             
-02857858772bd4320632bf6a51e02f6ejw6au   Human             
-0294102fd936228343828f48c7f2b270dklg3   Human             
-02a28b9de21bcb744bc2a7dedc008f91pbcpc   Human             
-02acbacd7a029481f44d5a2e2d3fb0b6xe0gx   Human             
-02caba35d87c40ffecdb1d998d909957dx7uo   Human             
-02db55f07b252ecff0aa4cba93880a44bv4eb   Human             
-02de68074ee2edccf6a00dfbd3213269w7k7i   Human             
-02fbc26f080655008337619a08cb7c04voa3c   Human             
-0306d10ab30a2f5cda41ae7ed77b8d31oehvv   Human             
-030fe7527c9394a74f25462cc2ed5af4myezo   Human             
-036abb8a6ba8171c3e41e16eec64e977ez1jd   Robot             
-03757ddf8a00f5c600241f3ce956ad7bfv7tw   Human             
-038d5c12a210df3818eb8dc34ebedac2ldr62   Human             
-03a5ac97839b407f5637ce534a0de583ygwx8   Human             
-03b57948c18680b55b6e9ba10eeac42659hsj   Human             
-03cac5cc349396386e833a24543980cckfhyu   Human             
-03dd77a9a964371144e72f66e791bbe2gkphv   Human             
-03e81f2bdfcf6f376b1deb163127eeaedmsqn   Human             
-03ead6957061c72543b8bc35f6b23852j0a0h   Human             
-042d1cd843d886c1bd8968e18bfa1b5b8t55o   Human             
-0430923026291636fff20fa1707fd34f0nayx   Human             
-0457e2bcdd0a06bd9c8dc3ea9b3c1a7419mgs   Human             
-046897d78512c75febd7cd493f408632lqm40   Human             
-04ab1fd6ed917467e808fbe3c6a126ebyusca   Human             
-04be4b7846b32bb6445928b4cb3d16af5xwzq   Human             
-04bffaa5e353b8a37a66767e3d9b531din3rc   Human             
-04db33ea12bbed34ea9907f908ad2ca2gnh2s   Human             
-04ef306fce8e66b25ecf6a78800e9776s4stl   Human             
-04f0778852b2671aab928de427ce7a8ck7vd3   Human             
-04f53d51a9cac9391b1d35c109294c48apax1   Human             
-04fc5cae5e63ce4437449827e58b2614058v2   Human             
-05068af5ba4645de987789f5a3248cd1a9nft   Human             
-051586c3297f5b992000048f3704550fxja6g   Human             
-05357eefa29d2c28f59f9e346ec64cebylh3z   Human             
-05457a5a02ff30f21d0d16d6e987c7cdn9poc   Human             
-0550568ad77e8e41f2b188be324c10b8xw912   Human             
-05606b484938640c4309fd9d286fea3fifen9   Human             
-0565d7d345ac29442b26cd9ffe2b3b841wwnb   Human             
-057071d595b08bd00caa8e3a91eb954bhgt1q   Human             
-0578bad1a458d60f9ba0e810f7058389lz4wj   Human             
-057a0760c7d5306786fe54af9d49ddac796rf   Human             
-058931834bffe72041a6f046e3c7dbbepzv1e   Robot             
-0590c434e36245c7983845752e73ebbdgyugm   Human             
-05b75a11dd918ab9d9dff644219e6727vqzz5   Human             
-05bd6eb40889047958e8b96332cc1975vib58   Human             
-05ccfd8ca96643c468ce64c50dd01078ux33u   Human             
-05ce81fa868e12e99ab0390d9579747b0tntg   Human             
-05de85f05fbb6a6bf86ff6b33be7678ek3flf   Human             
-05e5905428f5718a5cecfbde859dc689mcex9   Human             
-05f327ba853313444da03bbc41c1cf2ac8cbo   Human             
-05f5792216f9a5bfe91ecd0dbccc3cdceuwmf   Robot             
-05f9e773506d32bb059045cc9bf31b4187sga   Human             
-06052ab145f8a3ddc6ad8433ef11da8dputmu   Robot             
-0619a3ec37e6d49be8b9a2dd094bc8d4skgew   Human             
-06237b976cf6ae2d3e3bea5e2d3dade4krnvu   Human             
-064711ab52b5f3b7deac4c0465a7ee42h1uot   Human             
-06586694c6bba2ccaa8e13354701bb30em5ro   Human             
-068b3d3f48528027025cd31ba92c0d1bpkjdq   Human             
-0695b948daa6f8bffb8758d201c27517k50ao   Human             
-06a984e49706c47d079c33a6e038ee9a3moip   Human             
-06af48f3b9799398a569506d7cbfaa747k49t   Human             
-06b9a5226231e5c03cd00c074dce0bacjod7v   Human             
-06bbde5ca852af9ed6f2afdc6ee5bc3bko1h1   Human             
-06cb735854688d6d03c39fe1f8fe84563y4m1   Human             
-06dbfffbca4f34157f8a575fa535d9ad3xfwm   Human             
-06ea8e569d68b4767725e060d3a72938iqim6   Human             
-06ed8a1726d2a3d03c195cb219b2bbb9wbmz8   Human             
-06ff2d37e247d28cac0e2a944e39cd6budsbx   Human             
-070841d4774fef5fb50eca78a7156715q2hfi   Human             
-070c705dab050bebc8c9b379045d8ae8lx62r   Human             
-070d7aa0b0e7754e8c58194a6e2c8fc2js081   Human             
-070f01355c418cfca4d58db04a5d5af5wuk9n   Human             
-071300a7c3385788c00573d1c4bf150csf3cg   Human             
-07201f701766a7ea89b36b4e7b984beap4zdc   Human             
-074993754af952e8d582e9ff04a2bd5bh2s05   Human             
-0750cce1071adff96c9e8d417482cf762jjmb   Human             
-0751502caf4afd959c99955c80edacc85u11v   Human             
-0763e7371b763087182eb37930074ff8mj7fw   Human             
-0764308c5a1d35bf76c32d943eff07a50tp9e   Human             
-0774742ee8690973faf76efd53e66b435sakj   Human             
-07965f31105b6ef1ab30efedbfcd66707lwrm   Human             
-07a1eeb3bc5be386c1eb67f4bf69ad56wvkcc   Human             
-07a5dbfbf2629ef7018abb660fe0e795xmrw3   Human             
-07d23b0f422ef8851ad105ad659fa6492n2su   Human             
-07d4faa935f7e83e3b8c08c34baf74a59lwb6   Human             
-080042810884fa0937e9ddc89ca18a28jhz48   Human             
-08078a2526666deea62ca7c065bf22c4h7i8s   Human             
-080a1139f5575159bdca6044ae568550d8f12   Human             
-08144977af383cb9f1d3b51ade19f35frjmwm   Human             
-082659fb2b29eb5ae7c241393ebb76bb8wq4y   Human             
-083bc8dabba83902d98f0dd986388319sryc2   Human             
-084a25ac6da2d0997becd19eeda619c8po6d2   Human             
-085829afe1af4c5e81563458bb288088y992x   Human             
-0865d1e207fa3728a7379c415c903133rr6ce   Human             
-08728c61fc683905eec522c104030551y5qqh   Human             
-0875b86dd85b2cfc8727d6ae019832b870s6s   Human             
-0893eebbf5c7e431be85d18a4aad99a2mc32v   Human             
-08c389a8a55b13d0423b5c0dba3a9b6clh1gr   Human             
-08e14af6fbdb7aa4f3e38dcef26df601mz63o   Human             
-08e32f3d08db3edea0fea2e8c6634c8c4iq14   Human             
-08e89d1f541baac1ed7a0f16fcd46474ob5u9   Human             
-08f13a984962c44d88e10f188ffc7c38yqn9o   Human             
-08f2b08040d62a4dc55d9f65539b6090um72f   Human             
-08f929bbb45f6101b61eeade665542bdj6ioy   Human             
-08fdd6af0ffe017623d5dd2f3b509f598dk01   Human             
-0903c5009f3a06db04d5e40a83e04480ukuvm   Human             
-090b3859aad1ed0dfbe857cee2ef6aac8w0kp   Human             
-090c13aa3b9f8ff7227bfb74308e9b2e128jf   Human             
-091415979b1bf178f6c358bca7a3d30dkct2r   Human             
-09141d643a0021782bd040bf51cbdef4c17t5   Human             
-0918faabadfe856a25ebf1ff96b2cfaf7ez6a   Human             
-0925bab07c4d3600f2a56dc4468d243ahcuo6   Human             
-092ceb77862ed0c120af013fe90093e64qknp   Human             
-0933e1844ef295b026b5e6ff6f4c0960jhzqr   Human             
-094ca167823888700c962d06c82b261bdkp2a   Human             
-0956ac7abf361527a71a2c24a3f29b80ytlot   Human             
-09790d0fc669de383256c7171ffd5143abd3f   Human             
-097ac653dca3fe0ba83d24ebd1fd23b28ztxe   Human             
-0983ad44219dfddd5a501810f655233dur2r8   Human             
-0985bc13264dfe1af0abc65f3c0b8a96c8sl9   Human             
-09886a694696deb1bd6c3f12c6acb08bg66sz   Human             
-098d2373ee8e8f83c5e597f210f082e2gx9uj   Human             
-09a5fc9ba18647d388f46f0cb134cadd838er   Human             
-09aa1a84c7c7ba807ab6b2ea7fa2aa6dorm2y   Human             
-09ae6f2cf493017750379a2f5763ed53wfnni   Human             
-09ba0a844a8683d61e18f183ca23be7435vfd   Human             
-09d99aa44268dd5c999628733fe24b7f34cag   Human             
-09f0c22f61c5a7f643357a2e606b71677a2fa   Human             
-0a08cba9576abdd7f401ca52a50c328coo7j3   Human             
-0a0e1973ea3cba47f33b0166e9abbb4c5ndpa   Robot             
-0a19c41f6163cd4dd020318ea1a14fb4uapty   Human             
-0a3591872765dc366dab4ce259874395kh6mj   Human             
-0a39721ba697f341aae5915f25a440050er1r   Human             
-0a4733c94d22a38664cff64d6859ec18y6db1   Human             
-0a584f77759fefad47820d54ffa21a24dxqqu   Human             
-0a798636852c5948e899311731439855kisj2   Human             
-0a807dffdef748a472534f0b42df4cefi0913   Human             
-0a8622c7bc8526de762f3b59c91ecbbcvpua2   Human             
-0a86a3b6549af71433eff4e733d5a19aqi2qn   Human             
-0a926caf34d9c1d78c7e5af4ba05f065m4asu   Robot             
-0a9752168b19c91ec99b943a40af4c1a0b8s8   Human             
-0aba70072c70a28a41ac341bb9c41136t38g1   Human             
-0ac6f29b2269feea7d94aec032b6353adh38a   Human             
-0ad5956336240ebaa75932cf95c85a9by36tn   Human             
-0adb524d88ff4c0c6da7ed87599b34800pl1i   Human             
-0b1feb6c1cfe82dacf7634565f96ac48y5muk   Human             
-0b2f7f319c7727d3fb98cf01b4bdc5c6f9u83   Human             
-0b37699cfd1395db5454973168a5340bmp9ko   Human             
-0b4f65b31803376d777d1d935a44fcfa6d5ge   Human             
-0b5f65d28922ebbcf2ee9becd5f7dd08snxnr   Human             
-0b6c8845a6a8032ed0856636bbecd906v1ywr   Human             
-0b7b89e4e36908ddc32dfd2b46fe52dbp6by5   Human             
-0b839e3756b868b511319ff582235851nzeb7   Human             
-0b9ad98f40b4d4f3a9e5a1dd32185d18uy668   Human             
-0b9d45948078268c6394a9c51bf2db08cbijp   Human             
-0ba0e2c0a33c032cf705d7eadde0bab5j4j9e   Human             
-0bca7f1039919c1572cedda5224434f9g5j2f   Human             
-0bf21b162b2eddf37e92bf708a79b94b5e0st   Human             
-0bf40de3a66bd8a70777ece6756c6882jg7s6   Human             
-0bf6ae3f3085a90b43aa86e3c1eaff695w2jj   Human             
-0c1385603d821c3a5d91f5c291dfec2a0f7rv   Human             
-0c19bfcb25b818fb085f7b890f1c3fd0opg88   Human             
-0c2ab4132564259a0b02c5bf57b49763n2bzh   Human             
-0c3e5de44a27de84eff9f81ed777e8a7bxjyk   Human             
-0c44f546ed40a8ccfc2e985c6d1c624fjtj11   Human             
-0c47587c4459baed81d0b707eff6b4bff5tmx   Human             
-
-```r
-stopCluster(cl)
-```
-
-## Room for Improvement
+Room for Improvement
+--------------------
 
 The analysis done can be improved in several ways
 
-* Many other features can be taken into consideration
+-   Many other features can be taken into consideration
 
-* Other classification algorithms should be considered and compared to see which algorithm is better using the test metric
+-   Other classification algorithms should be considered and compared to
+    see which algorithm is better using the test metric
 
-* ROC should be considered instead of accuracy because classification is asymmetric and should be plotted for each algorithm to check which performs better on the cross validation 
-
-
+-   ROC should be considered instead of accuracy because classification
+    is asymmetric and should be plotted for each algorithm to check
+    which performs better on the cross validation
