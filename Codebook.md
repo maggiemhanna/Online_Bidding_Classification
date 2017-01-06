@@ -31,12 +31,16 @@ library(dplyr)
 ```r
 library(tidyr)
 library(knitr)
-library(pander)
 library(easyGgplot2)
 ```
 
 ```
 ## Loading required package: ggplot2
+```
+
+```r
+library(devtools)
+library(pander)
 ```
 
 ## Getting And Cleaning Data
@@ -275,39 +279,38 @@ features <- t(features)
 
 colnames(features) <- c("Human","Robot")
 
-panderOptions("digits", 2)
-
 pander(features)
 ```
 
 
---------------------------------------
-        &nbsp;          Human   Robot 
----------------------- ------- -------
-    **nb_bidders**      1881     103  
+------------------------------------------
+        &nbsp;           Human     Robot  
+---------------------- --------- ---------
+    **nb_bidders**       1881       103   
 
-     **nb_bids**        1414    4004  
+     **nb_bids**         1414      4004   
 
-   **nb_auctions**       58      145  
+   **nb_auctions**       58.07      145   
 
-    **nb_devices**       74      164  
+    **nb_devices**       73.95     163.6  
 
-   **nb_countries**      13      26   
+   **nb_countries**      12.68     26.48  
 
-      **nb_ips**         581    2388  
+      **nb_ips**         581.3     2388   
 
- **bids_per_auction**    6.4     23   
+ **bids_per_auction**    6.442     23.15  
 
- **bids_per_country**    40      181  
+ **bids_per_country**    40.47      181   
 
- **bids_per_device**     12      100  
+ **bids_per_device**     12.36     100.4  
 
-   **bids_per_ip**       8.7     60   
+   **bids_per_ip**       8.693     60.39  
 
-   **bids_per_url**      16      117  
+   **bids_per_url**      15.63     116.8  
 
-    **mean_resp**      3.4e+12 5.3e+10
---------------------------------------
+    **mean_resp**      3.395e+12 5.332e+10
+------------------------------------------
+
 
 As you can see from the table, most of the variables come out to be significant. 
 
@@ -445,26 +448,26 @@ kable(training[1:20,])
 
         nb_bids   nb_auctions   nb_devices   nb_countries   nb_ips     inter_time   bids_per_auction   bids_per_country   bids_per_device   bids_per_ip   bids_per_url  outcome 
 -----  --------  ------------  -----------  -------------  -------  -------------  -----------------  -----------------  ----------------  ------------  -------------  --------
-217           3             2            3              2        3   3.483263e+13           1.500000           1.500000          1.000000      1.000000       1.000000  0       
-206        6002           552          470             90     3324   2.271183e+09          10.873188          66.688889         12.770213      1.805656       3.637576  1       
-387          10             2            4              2       10   1.097181e+12           5.000000           5.000000          2.500000      1.000000      10.000000  0       
-1835         16             7           10              2       14   8.288105e+11           2.285714           8.000000          1.600000      1.142857       1.066667  0       
-139          49            35           28             12       45   2.802796e+11           1.400000           4.083333          1.750000      1.088889       2.333333  0       
-1762          1             1            1              1        1            NaN           1.000000           1.000000          1.000000      1.000000       1.000000  0       
-850         642            36          186              8      505   1.197226e+11          17.833333          80.250000          3.451613      1.271287       1.744565  0       
-157         340            51           17              9       41   3.721456e+10           6.666667          37.777778         20.000000      8.292683       9.444444  1       
-812           1             1            1              1        1            NaN           1.000000           1.000000          1.000000      1.000000       1.000000  0       
-1539        261            55           49             28      195   5.235810e+10           4.745455           9.321429          5.326531      1.338461     261.000000  1       
-1441        188            23           56              3       64   7.032648e+10           8.173913          62.666667          3.357143      2.937500       1.032967  0       
-1809          2             1            2              1        2   3.146895e+12           2.000000           2.000000          1.000000      1.000000       1.000000  0       
-295         223            44           83              5      195   6.137956e+10           5.068182          44.600000          2.686747      1.143590       2.450550  0       
-847         122            10           24              1       32   6.251718e+11          12.200000         122.000000          5.083333      3.812500       3.388889  0       
-1281          7             7            6              5        7   2.165956e+12           1.000000           1.400000          1.166667      1.000000       1.750000  0       
-558          13             9            9              7       12   9.398202e+11           1.444444           1.857143          1.444444      1.083333       1.625000  0       
-1665      58195          1621         1396            137    12978   1.328308e+09          35.900679         424.781022         41.686963      4.484127      23.065795  0       
-278          41            31           19              6       20   1.772372e+12           1.322581           6.833333          2.157895      2.050000       8.200000  0       
-440        3746           169          388             63     1366   3.641360e+09          22.165681          59.460318          9.654639      2.742313       3.842051  1       
-1113         80            37           36              6       46   1.723964e+11           2.162162          13.333333          2.222222      1.739130       2.962963  0       
+293          76            30           26              2       43   1.684218e+11           2.533333          38.000000          2.923077      1.767442      10.857143  0       
+1378       1279           303          283             43      778   1.065390e+10           4.221122          29.744186          4.519435      1.643959       2.542743  0       
+1434          1             1            1              1        1            NaN           1.000000           1.000000          1.000000      1.000000       1.000000  0       
+315           2             2            2              1        2   1.641789e+12           1.000000           2.000000          1.000000      1.000000       2.000000  0       
+991           3             2            1              1        1   8.184211e+09           1.500000           3.000000          3.000000      3.000000       1.500000  0       
+1255          1             1            1              1        1            NaN           1.000000           1.000000          1.000000      1.000000       1.000000  0       
+68          163            65           84             20      126   8.169558e+10           2.507692           8.150000          1.940476      1.293651       9.055556  0       
+727          32            20           19              3       26   4.293277e+11           1.600000          10.666667          1.684211      1.230769       1.600000  0       
+537           3             1            2              1        3   4.338947e+12           3.000000           3.000000          1.500000      1.000000       1.500000  0       
+1305         45            23           12             16       37   3.001065e+11           1.956522           2.812500          3.750000      1.216216      45.000000  0       
+1603          2             2            2              2        2   8.715474e+12           1.000000           1.000000          1.000000      1.000000       1.000000  0       
+328           3             1            3              2        3   1.266842e+12           3.000000           1.500000          1.000000      1.000000       1.000000  0       
+270           2             1            2              1        2   7.491053e+12           2.000000           2.000000          1.000000      1.000000       1.000000  0       
+818         204             7           94              9      112   6.371377e+10          29.142857          22.666667          2.170213      1.821429       3.777778  0       
+1457       1582           187          271             61     1159   4.800396e+10           8.459893          25.934426          5.837638      1.364970       3.202429  0       
+1739         56            40           31             15       44   1.388238e+12           1.400000           3.733333          1.806452      1.272727       2.800000  0       
+1569          1             1            1              1        1            NaN           1.000000           1.000000          1.000000      1.000000       1.000000  0       
+299           4             2            1              1        1   3.859649e+09           2.000000           4.000000          4.000000      4.000000       2.000000  0       
+10           15             9            7              3       14   8.994286e+11           1.666667           5.000000          2.142857      1.071429       1.666667  0       
+1176          4             2            2              2        2   3.512965e+12           2.000000           2.000000          2.000000      2.000000       2.000000  0       
 
 ### Repeat for Testing 
 
@@ -734,17 +737,17 @@ summary(results)
 ## 
 ## Accuracy 
 ##            Min. 1st Qu. Median   Mean 3rd Qu.   Max. NA's
-## logistic 0.9286  0.9362 0.9405 0.9406  0.9448 0.9524    0
-## svm      0.9405  0.9408 0.9464 0.9461  0.9467 0.9581    0
-## rf       0.9345  0.9522 0.9554 0.9560  0.9643 0.9762    0
-## gbm      0.9345  0.9465 0.9525 0.9534  0.9583 0.9762    0
+## logistic 0.9226  0.9349 0.9405 0.9398  0.9408 0.9524    0
+## svm      0.9345  0.9408 0.9464 0.9447  0.9464 0.9527    0
+## rf       0.9286  0.9464 0.9524 0.9532  0.9586 0.9763    0
+## gbm      0.9167  0.9420 0.9525 0.9520  0.9585 0.9821    0
 ## 
 ## Kappa 
-##              Min.   1st Qu. Median    Mean 3rd Qu.   Max. NA's
-## logistic -0.02024 -0.008123 0.0000 0.08611  0.1655 0.3198    0
-## svm       0.00000  0.000000 0.1729 0.13440  0.1729 0.3509    0
-## rf        0.12990  0.347100 0.4419 0.45280  0.5564 0.7383    0
-## gbm       0.14370  0.344500 0.4432 0.44050  0.5262 0.7383    0
+##              Min.  1st Qu.  Median    Mean 3rd Qu.   Max. NA's
+## logistic -0.02825 -0.01088 0.13990 0.09354  0.1499 0.4058    0
+## svm      -0.01094  0.00000 0.08273 0.10080  0.1729 0.3199    0
+## rf       -0.01987  0.26750 0.40850 0.39860  0.5564 0.7384    0
+## gbm       0.00000  0.31990 0.39750 0.41600  0.5458 0.8144    0
 ```
 
 It is also useful to review the results using a few different visualization techniques to get an idea of the mean and spread of accuracies.
@@ -798,12 +801,12 @@ bidder_id                               predicted_outcome
 009479273c288b1dd096dc3087653499lrx3c   Human             
 009cee781e8414f7fb55b2f92157e9dbu0y6o   Human             
 00a79ebd15f0b24a0a3b5794457cd8ed7dng1   Human             
-00b519ec8ed5e370328451379bb708a306eoj   Robot             
+00b519ec8ed5e370328451379bb708a306eoj   Human             
 00ceb1b66fc6c08f2e1b7937b5bc7f870qn5k   Human             
 00dd948c3a88f7b68f1952dbeeac68ffb6qoc   Human             
 00e0f614d9dd32dd27f6080f472d2934emlos   Human             
 010e5ed5eb439e0daf1870a0b426e32cztbdt   Human             
-0113d101ec6aabd354adac645a1ec3e82ln88   Human             
+0113d101ec6aabd354adac645a1ec3e82ln88   Robot             
 0165dcd38f54e83aafb7bb3d95cd9369800km   Human             
 016e3c511caf01a845c9c976bbf355a6m1nns   Human             
 0176025cc599cb59f825d592b8ef3ee3p5aqv   Human             
@@ -820,9 +823,9 @@ bidder_id                               predicted_outcome
 023d51d2bcf7d962c766ff570fa7a21ds3c96   Human             
 024b9e2d822424b09ddf86b2a9cf8614a0uwy   Human             
 024d6a4a489d4411f795d04b6617d1f47qvrs   Human             
-02518a364d87661eed1453e251933862yvmjj   Robot             
+02518a364d87661eed1453e251933862yvmjj   Human             
 02615aa755c78f1812d7f772f4ed3d8anist8   Human             
-02857858772bd4320632bf6a51e02f6ejw6au   Robot             
+02857858772bd4320632bf6a51e02f6ejw6au   Human             
 0294102fd936228343828f48c7f2b270dklg3   Human             
 02a28b9de21bcb744bc2a7dedc008f91pbcpc   Human             
 02acbacd7a029481f44d5a2e2d3fb0b6xe0gx   Human             
@@ -849,7 +852,7 @@ bidder_id                               predicted_outcome
 04be4b7846b32bb6445928b4cb3d16af5xwzq   Human             
 04bffaa5e353b8a37a66767e3d9b531din3rc   Human             
 04db33ea12bbed34ea9907f908ad2ca2gnh2s   Human             
-04ef306fce8e66b25ecf6a78800e9776s4stl   Human             
+04ef306fce8e66b25ecf6a78800e9776s4stl   Robot             
 04f0778852b2671aab928de427ce7a8ck7vd3   Human             
 04f53d51a9cac9391b1d35c109294c48apax1   Human             
 04fc5cae5e63ce4437449827e58b2614058v2   Human             
@@ -868,7 +871,7 @@ bidder_id                               predicted_outcome
 05b75a11dd918ab9d9dff644219e6727vqzz5   Human             
 05bd6eb40889047958e8b96332cc1975vib58   Human             
 05ccfd8ca96643c468ce64c50dd01078ux33u   Human             
-05ce81fa868e12e99ab0390d9579747b0tntg   Human             
+05ce81fa868e12e99ab0390d9579747b0tntg   Robot             
 05de85f05fbb6a6bf86ff6b33be7678ek3flf   Human             
 05e5905428f5718a5cecfbde859dc689mcex9   Human             
 05f327ba853313444da03bbc41c1cf2ac8cbo   Human             
@@ -901,7 +904,7 @@ bidder_id                               predicted_outcome
 0751502caf4afd959c99955c80edacc85u11v   Human             
 0763e7371b763087182eb37930074ff8mj7fw   Human             
 0764308c5a1d35bf76c32d943eff07a50tp9e   Human             
-0774742ee8690973faf76efd53e66b435sakj   Robot             
+0774742ee8690973faf76efd53e66b435sakj   Human             
 07965f31105b6ef1ab30efedbfcd66707lwrm   Human             
 07a1eeb3bc5be386c1eb67f4bf69ad56wvkcc   Human             
 07a5dbfbf2629ef7018abb660fe0e795xmrw3   Human             
@@ -916,7 +919,7 @@ bidder_id                               predicted_outcome
 084a25ac6da2d0997becd19eeda619c8po6d2   Human             
 085829afe1af4c5e81563458bb288088y992x   Human             
 0865d1e207fa3728a7379c415c903133rr6ce   Human             
-08728c61fc683905eec522c104030551y5qqh   Human             
+08728c61fc683905eec522c104030551y5qqh   Robot             
 0875b86dd85b2cfc8727d6ae019832b870s6s   Human             
 0893eebbf5c7e431be85d18a4aad99a2mc32v   Human             
 08c389a8a55b13d0423b5c0dba3a9b6clh1gr   Human             
@@ -943,10 +946,10 @@ bidder_id                               predicted_outcome
 0983ad44219dfddd5a501810f655233dur2r8   Human             
 0985bc13264dfe1af0abc65f3c0b8a96c8sl9   Human             
 09886a694696deb1bd6c3f12c6acb08bg66sz   Human             
-098d2373ee8e8f83c5e597f210f082e2gx9uj   Robot             
+098d2373ee8e8f83c5e597f210f082e2gx9uj   Human             
 09a5fc9ba18647d388f46f0cb134cadd838er   Human             
 09aa1a84c7c7ba807ab6b2ea7fa2aa6dorm2y   Human             
-09ae6f2cf493017750379a2f5763ed53wfnni   Robot             
+09ae6f2cf493017750379a2f5763ed53wfnni   Human             
 09ba0a844a8683d61e18f183ca23be7435vfd   Human             
 09d99aa44268dd5c999628733fe24b7f34cag   Human             
 09f0c22f61c5a7f643357a2e606b71677a2fa   Human             
@@ -958,7 +961,7 @@ bidder_id                               predicted_outcome
 0a4733c94d22a38664cff64d6859ec18y6db1   Human             
 0a584f77759fefad47820d54ffa21a24dxqqu   Human             
 0a798636852c5948e899311731439855kisj2   Human             
-0a807dffdef748a472534f0b42df4cefi0913   Human             
+0a807dffdef748a472534f0b42df4cefi0913   Robot             
 0a8622c7bc8526de762f3b59c91ecbbcvpua2   Human             
 0a86a3b6549af71433eff4e733d5a19aqi2qn   Human             
 0a926caf34d9c1d78c7e5af4ba05f065m4asu   Human             
@@ -972,7 +975,7 @@ bidder_id                               predicted_outcome
 0b37699cfd1395db5454973168a5340bmp9ko   Human             
 0b4f65b31803376d777d1d935a44fcfa6d5ge   Human             
 0b5f65d28922ebbcf2ee9becd5f7dd08snxnr   Human             
-0b6c8845a6a8032ed0856636bbecd906v1ywr   Human             
+0b6c8845a6a8032ed0856636bbecd906v1ywr   Robot             
 0b7b89e4e36908ddc32dfd2b46fe52dbp6by5   Human             
 0b839e3756b868b511319ff582235851nzeb7   Human             
 0b9ad98f40b4d4f3a9e5a1dd32185d18uy668   Human             
