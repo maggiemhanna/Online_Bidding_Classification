@@ -15,8 +15,9 @@ In this project, I'll be chasing down robots for an online auction site. The goa
 library(dplyr)
 library(tidyr)
 library(knitr)
-library(easyGgplot2)
 ```
+
+More libraries will be loaded later.
 
 ## Getting And Cleaning Data
 
